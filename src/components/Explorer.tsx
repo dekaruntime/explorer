@@ -342,9 +342,31 @@ export function Explorer() {
             <b>{(data?.totals.nodes ?? 0).toLocaleString()}</b> nodes ·{' '}
             <b>{(data?.totals.edges ?? 0).toLocaleString()}</b> edges ·{' '}
             <b>{(data?.totals.lines ?? 0).toLocaleString()}</b> lines
+            {/* One number, and it is the whole wait. Nothing can be parsed
+                before it has been read, so reporting only the parse tells a
+                reader they waited a third of what they did. A dataset from the
+                store carries no fetch of its own — the reading happened in CI,
+                which is why the published repositories are quick. The split is
+                on the hover. */}
             {' · analyzed in '}
-            <b title={data?.analysis?.cqx ? `cqx ${data.analysis.cqx}` : undefined}>
-              {typeof data?.analysis?.ms === 'number' ? seconds(data.analysis.ms) : '0.0'}
+            <b
+              title={
+                data?.analysis
+                  ? [
+                      data.analysis.fetch ? `${seconds(data.analysis.fetch)}s fetching` : null,
+                      typeof data.analysis.ms === 'number'
+                        ? `${seconds(data.analysis.ms)}s analysing`
+                        : null,
+                      data.analysis.cqx ? `cqx ${data.analysis.cqx}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : undefined
+              }
+            >
+              {typeof data?.analysis?.ms === 'number'
+                ? seconds(data.analysis.ms + (data.analysis.fetch ?? 0))
+                : '0.0'}
             </b>
             s
           </span>

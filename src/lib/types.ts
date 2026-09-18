@@ -144,6 +144,12 @@ export interface Analysis {
   ms: number | null;
   /** The version of cqx that wrote it. */
   cqx: string;
+  /**
+   * Milliseconds spent reading the source before any of it was parsed. Only
+   * set when the reading happened here — a dataset from the store was fetched
+   * by whoever published it, and that is not this reader's wait.
+   */
+  fetch?: number;
 }
 
 export interface Dataset {
