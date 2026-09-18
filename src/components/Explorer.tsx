@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Dataset } from '../lib/types';
-import { defaultView, readView, sameView, toQuery, type LevelId, type View } from '../lib/view';
+import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
 import { ElevationRail, type Elevation } from './ElevationRail';
 import { ThemePicker } from './ThemePicker';
 import { TimeMachine } from './TimeMachine';
@@ -21,13 +21,20 @@ const TIME_MACHINE_SLOTS = 5;
  * Functions until it is cleared. L4 and L5 are siblings rather than a descent —
  * a file holds both, and what relates them is use, not containment.
  */
-/** Datasets committed alongside the site, analysed ahead of time. */
+/**
+ * Datasets committed alongside the site, analysed ahead of time.
+ *
+ * `repo` is the address; `file` is where the analysis of it lives.
+ */
 const PREBAKED = [
-  { id: 'deka', label: 'dekaruntime/deka' },
-  { id: 'dsc', label: 'dekaruntime/dsc' },
+  { repo: 'dekaruntime/deka', file: 'deka' },
+  { repo: 'dekaruntime/dsc', file: 'dsc' },
 ] as const;
 
-const DEFAULT_REPO = PREBAKED[0].id;
+const datasetFor = (repo: string): string =>
+  PREBAKED.find((p) => p.repo === repo)?.file ?? PREBAKED[0].file;
+
+const DEFAULT_REPO = PREBAKED[0].repo;
 
 export function Explorer() {
   const [data, setData] = useState<Dataset | null>(null);
@@ -35,14 +42,14 @@ export function Explorer() {
   // One object rather than five pieces of state, because the URL describes all
   // of it at once and they have to stay in step.
   const [view, setView] = useState<View>(() => defaultView(DEFAULT_REPO));
-  const { repo: source, level, pkg, file, commit } = view;
+  const { repo: source, level, ref } = view;
 
   /** Changes the view and records it, so back returns here. */
   const go = (patch: Partial<View>) => {
     setView((current) => {
       const next = { ...current, ...patch };
       if (sameView(current, next)) return current;
-      window.history.pushState(next, '', toQuery(next, DEFAULT_REPO));
+      window.history.pushState(next, '', toPath(next));
       return next;
     });
   };
@@ -51,11 +58,11 @@ export function Explorer() {
     // The first render has to match the server's, so the URL is read after
     // mounting rather than during it, and replaces the entry instead of adding
     // one — arriving on a link should not need two backs to leave.
-    const fromUrl = readView(DEFAULT_REPO);
+    const fromUrl = parsePath(window.location.pathname, DEFAULT_REPO);
     setView(fromUrl);
-    window.history.replaceState(fromUrl, '', toQuery(fromUrl, DEFAULT_REPO));
+    window.history.replaceState(fromUrl, '', toPath(fromUrl));
 
-    const onPop = () => setView(readView(DEFAULT_REPO));
+    const onPop = () => setView(parsePath(window.location.pathname, DEFAULT_REPO));
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -66,19 +73,32 @@ export function Explorer() {
     setError(null);
     // Relative to the document, not to the origin: the site has to work when
     // it is served from a subpath as well as from a domain root.
-    fetch(`./data/${source}.json`)
+    fetch(`/data/${datasetFor(source)}.json`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status} fetching ${source}`))))
       .then((d: Dataset) => { if (live) setData(d); })
       .catch((e: Error) => { if (live) setError(e.message); });
     return () => { live = false; };
   }, [source]);
 
-  // Newest first: L0 is head, each step down is a commit further back.
+  // Newest first: the first entry is head, each one after it a commit further back.
   const timeline = useMemo(() => (data ? [...data.history].reverse() : []), [data]);
+  const commit = Math.max(0, timeline.findIndex((c) => c.short === ref));
 
-  const packageName = (id: string | null) =>
-    id && data ? (data.packages.find((p) => p.id === id)?.name ?? null) : null;
-  const filePath = file && data ? (data.files.find((f) => f.id === file)?.path ?? null) : null;
+  useEffect(() => {
+    // An address without a commit is not a stable address, so once the head is
+    // known the URL is completed in place rather than by adding an entry.
+    if (!data || view.ref || timeline.length === 0) return;
+    const canonical = { ...view, ref: timeline[0]!.short };
+    setView(canonical);
+    window.history.replaceState(canonical, '', toPath(canonical));
+  }, [data, view, timeline]);
+
+  const packageName = view.pkg;
+  const packageId =
+    data && view.pkg ? (data.packages.find((p) => p.name === view.pkg)?.id ?? null) : null;
+  const filePath = view.file;
+  const pkg = packageId;
+  const file = filePath;
 
   const files = useMemo(
     () => (!data ? [] : pkg ? data.files.filter((f) => f.pkg === pkg) : data.files),
@@ -87,13 +107,13 @@ export function Explorer() {
   const types = useMemo(() => {
     if (!data) return [];
     if (filePath) return data.types.filter((t) => t.file === filePath);
-    if (pkg) return data.types.filter((t) => t.pkg === packageName(pkg));
+    if (pkg) return data.types.filter((t) => t.pkg === packageName);
     return data.types;
   }, [data, pkg, filePath]);
   const functions = useMemo(() => {
     if (!data) return [];
     if (filePath) return data.functions.filter((f) => f.file === filePath);
-    if (pkg) return data.functions.filter((f) => f.pkg === packageName(pkg));
+    if (pkg) return data.functions.filter((f) => f.pkg === packageName);
     return data.functions;
   }, [data, pkg, filePath]);
 
@@ -109,9 +129,9 @@ export function Explorer() {
   const scopeBar =
     data && (pkg || file) ? (
       <div className="scope">
-        scope: {pkg ? <b>{packageName(pkg)}</b> : null}
+        scope: {packageName ? <b>{packageName}</b> : null}
         {file ? <> / <b>{filePath}</b></> : null}
-        <button onClick={() => go({ pkg: null, file: null })}>clear</button>
+        <button onClick={() => go({ pkg: null, file: null, level: 'L2' })}>clear</button>
       </div>
     ) : null;
 
@@ -142,11 +162,11 @@ export function Explorer() {
             <select
               value={source}
               onChange={(e) =>
-                go({ repo: e.target.value, pkg: null, file: null, commit: 0, level: 'L0' })
+                go({ repo: e.target.value, pkg: null, file: null, ref: null, level: 'L0' })
               }
             >
               {PREBAKED.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
+                <option key={p.repo} value={p.repo}>{p.repo}</option>
               ))}
             </select>
           </label>
@@ -169,7 +189,7 @@ export function Explorer() {
             commits={timeline}
             slots={TIME_MACHINE_SLOTS}
             current={commit}
-            onSelect={(i) => go({ commit: i, level: 'L0' })}
+            onSelect={(i) => go({ ref: timeline[i]?.short ?? null, level: 'L0' })}
           />
         </div>
 
@@ -185,7 +205,7 @@ export function Explorer() {
               score={data.score}
               commits={timeline}
               viewing={commit}
-              onBackToHead={() => go({ commit: 0 })}
+              onBackToHead={() => go({ ref: timeline[0]?.short ?? null })}
               onJump={(l) => go({ level: l as LevelId })}
             />
           ) : level === 'L1' ? (
@@ -193,13 +213,21 @@ export function Explorer() {
           ) : level === 'L2' ? (
             <PackagesLevel
               packages={data.packages}
-              onSelect={(id) => go({ pkg: id, file: null, level: 'L3' })}
+              onSelect={(id) =>
+                go({
+                  pkg: data.packages.find((p) => p.id === id)?.name ?? null,
+                  file: null,
+                  level: 'L3',
+                })
+              }
             />
           ) : level === 'L3' ? (
             <FilesLevel
               files={files}
-              scopeName={packageName(pkg)}
-              onSelect={(id) => go({ file: id, level: 'L4' })}
+              scopeName={packageName}
+              onSelect={(id) =>
+                go({ file: data.files.find((f) => f.id === id)?.path ?? null, level: 'L4' })
+              }
             />
           ) : level === 'L4' ? (
             <TypesLevel types={types} />
