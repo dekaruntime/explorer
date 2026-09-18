@@ -37,10 +37,16 @@ export interface Stage {
 
 let worker: Worker | null = null;
 
-/** One worker per tab, so the module is compiled once however many
- * repositories are looked at. */
+/**
+ * One worker per tab, so the module is compiled once however many repositories
+ * are looked at. Named, as the tour names its own, so it is identifiable in a
+ * profile rather than appearing as an anonymous thread.
+ */
 function hired(): Worker {
-  worker ??= new Worker(new URL('./analyse.worker.ts', import.meta.url), { type: 'module' });
+  worker ??= new Worker(new URL('./analyse.worker.ts', import.meta.url), {
+    type: 'module',
+    name: 'cqx-analysis',
+  });
   return worker;
 }
 
