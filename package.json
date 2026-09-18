@@ -22,8 +22,9 @@
     "@cloudflare/workers-types": "^5.20260918.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "playwright": "^1.63.0",
     "typescript": "^5.7.0",
     "wrangler": "^4.0.0"
   },
-  "cqx": "v0.1.4"
+  "cqx": "v0.1.6"
 }

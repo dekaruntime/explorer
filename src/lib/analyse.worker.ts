@@ -37,7 +37,14 @@ export type Reply =
 const post = (reply: Reply) => self.postMessage(reply);
 
 /** Bumped when the shape changes, so an old dataset is not read as a new one. */
-const DATASETS = 'cqx-datasets-v1';
+/**
+ * v2 because v1 may hold datasets built while every file in a repository
+ * carried the first file's contents — a tree whose entries named their blob
+ * `blob` rather than `sha` gave them all one cache key. Those datasets are
+ * wrong and cannot be told apart from right ones, so the whole store is left
+ * behind rather than trusted.
+ */
+const DATASETS = 'cqx-datasets-v2';
 
 /** A commit, and the version of cqx that read it. */
 const key = (repo: string, sha: string) => `https://cqx.invalid/dataset/${repo}/${sha}`;
@@ -79,11 +86,26 @@ self.onmessage = async (event: MessageEvent<Request>) => {
 
     const began = performance.now();
     post({ type: 'stage', phase: 'listing', done: 0, total: 0, cached: 0 });
+    // Counted here rather than in the module, which knows how many it has
+    // parsed but not how many it was given. Reported no more often than the
+    // screen can show — a repository of six thousand files would otherwise
+    // post six thousand messages to draw sixty frames.
+    let parsed = 0;
+    let announced = 0;
+    let expected = 0;
+    const onFile = () => {
+      parsed += 1;
+      if (parsed - announced >= 25 || parsed === expected) {
+        announced = parsed;
+        post({ type: 'stage', phase: 'analysing', done: parsed, total: expected, cached: 0 });
+      }
+    };
+
     // A new instance each time, and the last one goes. Linear memory never
     // shrinks, so an instance that has read a large repository would hand the
     // next one a heap already spent. The compiled module is kept and reused;
     // it is the expensive half and it holds nothing.
-    const [cqx, tree] = await Promise.all([Analysis.load(wasm), fetchTree(repo, sha)]);
+    const [cqx, tree] = await Promise.all([Analysis.load(wasm, onFile), fetchTree(repo, sha)]);
 
     if (tree.truncated) {
       throw new Error(`${repo} is too large for GitHub to list in one request.`);
@@ -98,7 +120,8 @@ self.onmessage = async (event: MessageEvent<Request>) => {
     // Everything up to here is network and cache. What follows is this machine.
     const fetched = Math.round(performance.now() - began);
 
-    post({ type: 'stage', phase: 'analysing', done: files.length, total: files.length, cached: 0 });
+    expected = files.length;
+    post({ type: 'stage', phase: 'analysing', done: 0, total: expected, cached: 0 });
     cqx.reset(repo);
     for (const file of files) cqx.addFile(file.path, file.content);
 
