@@ -135,12 +135,25 @@ export interface EffectRow {
   form?: string;
 }
 
+/** What producing this dataset cost, and what produced it. */
+export interface Analysis {
+  /**
+   * Milliseconds from source in memory to finished dataset. Null when nothing
+   * timed it — a wasm build has no clock, so the page fills this in.
+   */
+  ms: number | null;
+  /** The version of cqx that wrote it. */
+  cqx: string;
+}
+
 export interface Dataset {
   repo: string;
   branch: string;
   remote: string | null;
   commits_url: string | null;
   score: Score;
+  /** Absent in datasets written before cqx recorded it. */
+  analysis?: Analysis;
   /** Filled from the index rather than from here: a dataset describes one commit. */
   history?: Commit[];
   packages: Package[];

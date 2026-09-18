@@ -268,6 +268,17 @@ export function Explorer() {
                 <b>{data.totals.nodes.toLocaleString()}</b> nodes ·{' '}
                 <b>{data.totals.edges.toLocaleString()}</b> edges ·{' '}
                 <b>{data.totals.lines.toLocaleString()}</b> lines
+                {/* Only when something actually timed it. A dataset written
+                    before cqx recorded this has no honest number to show. */}
+                {typeof data.analysis?.ms === 'number' ? (
+                  <>
+                    {' · analyzed in '}
+                    <b title={`cqx ${data.analysis.cqx}`}>
+                      {data.analysis.ms.toLocaleString()}
+                    </b>
+                    {' ms'}
+                  </>
+                ) : null}
               </>
             ) : null}
           </span>

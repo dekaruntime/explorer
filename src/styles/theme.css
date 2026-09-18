@@ -56,7 +56,13 @@ header { border-bottom: 1px solid var(--line); }
 /* Without a mark declared, the tool signs its own header, in its own face. */
 span.brand:not(:has(img)) { font-family: var(--mono); font-weight: 700; }
 span.brand b { color: var(--aink); }
-.colophon a.cqx { font-weight: 700; letter-spacing: -.02em; }
+/* The tool signing its own work, in the face it uses everywhere else. The
+   surrounding rule paints every colophon link accent, which left the q with
+   nothing to stand out against. */
+.colophon a.cqx {
+  font-family: var(--mono); font-weight: 700; font-size: 17px;
+  letter-spacing: -.02em; color: var(--ink);
+}
 .colophon a.cqx b { color: var(--aink); }
 .repo { font-family: var(--mono); font-size: 13px; color: var(--muted); }
 .picker { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; }
