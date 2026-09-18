@@ -60,8 +60,8 @@ h2{margin:0 0 3px;font-size:24px;letter-spacing:-.02em;text-wrap:balance}
 .ring .tr{fill:none;stroke:var(--soft);stroke-width:6}
 .ring .ar{fill:none;stroke-width:6;stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%}
 .ring .nm{font-family:var(--mono);font-size:30px;font-weight:600;dominant-baseline:central;text-anchor:middle}
-.ring .cap{font-size:14px;font-weight:500}
-.ring .dl{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.ring .cap{font-size:14px;font-weight:500;color:var(--ink)}
+.ring .dl{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:-.01em}
 .ring .dl.up{color:var(--pass)} .ring .dl.dn{color:var(--fail)}
 .ring[aria-pressed="true"] .cap{color:var(--aink);font-weight:700}
 .legend{display:flex;gap:20px;justify-content:center;padding:9px 14px;margin:10px auto 20px;border:1px solid var(--line);border-radius:7px;width:max-content;font-family:var(--mono);font-size:12px;color:var(--muted)}
@@ -168,7 +168,10 @@ function L0(){
   const rings=cats.map(([c,v])=>{
     const C=2*Math.PI*40,off=C*(1-v/100);
     const d=baseline&&baseline[c]!==undefined?v-baseline[c]:null;
-    const dl=d===null?'':`<span class="dl ${d>0?'up':d<0?'dn':''}">${d===0?'no change':(d>0?'+':'')+d} since ${esc(D.history[0].short)}</span>`;
+    // Nothing is said when nothing moved: an unchanged score is the common
+    // case, and a row of "no change" is noise on every ring.
+    const dl=(d===null||d===0)?''
+      :`<span class="dl ${d>0?'up':'dn'}">${d>0?'+':''}${d} since commit ${esc(D.history[0].short)}</span>`;
     return `<button class="ring" data-c="${c}" aria-pressed="${S.cat===c}">
       <svg viewBox="0 0 96 96"><circle class="tr" cx="48" cy="48" r="40"/>
       <circle class="ar" cx="48" cy="48" r="40" stroke="${band(v)}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/>
