@@ -1,5 +1,10 @@
 {
-  "_comment": "Which repositories this deployment opens with. Content, not code. Anything not listed is still reachable by typing its address.",
+  "_comment": "This deployment's content: whose it is, which repositories it opens with, and where its own datasets live if it has any. Not code — the explorer renders whatever is here.",
+  "brand": {
+    "name": "deka",
+    "icon": "/brand/deka.png",
+    "href": "https://deka.gg"
+  },
   "default": "dekaruntime/deka",
   "entries": [
     { "repo": "dekaruntime/deka" },
