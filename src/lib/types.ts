@@ -141,7 +141,8 @@ export interface Dataset {
   remote: string | null;
   commits_url: string | null;
   score: Score;
-  history: Commit[];
+  /** Filled from the index rather than from here: a dataset describes one commit. */
+  history?: Commit[];
   packages: Package[];
   files: FileNode[];
   types: TypeDecl[];
