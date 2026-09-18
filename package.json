@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "node scripts/fetch-wasm.mjs",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "npm run build && wrangler dev",
@@ -22,5 +23,6 @@
     "@types/react-dom": "^19.0.0",
     "typescript": "^5.7.0",
     "wrangler": "^4.0.0"
-  }
+  },
+  "cqx": "v0.1.2"
 }

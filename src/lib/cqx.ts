@@ -1,9 +1,9 @@
 /**
  * Calling the analysis.
  *
- * cqx exports four functions and a length-prefixed buffer; this is the whole of
- * the glue. No bindgen, so there is nothing to install and nothing to keep in
- * step with a generator.
+ * cqx exports a handful of functions and a length-prefixed buffer; this is the
+ * whole of the glue. No bindgen, so there is nothing to install and nothing to
+ * keep in step with a generator.
  */
 
 interface Exports {
@@ -15,6 +15,7 @@ interface Exports {
   cqx_file_count(): number;
   cqx_facts(): number;
   cqx_score(ptr: number, len: number): number;
+  cqx_dataset(r: number, rl: number, c: number, cl: number): number;
 }
 
 const encoder = new TextEncoder();
@@ -89,5 +90,24 @@ export class Analysis {
       ? this.withString(config, (p, l) => this.take(this.ex.cqx_score(p, l)))
       : this.take(this.ex.cqx_score(0, 0));
     return JSON.parse(reply);
+  }
+
+  /**
+   * The whole dataset for the snapshot: the score, and the facts folded into
+   * what an explorer renders.
+   *
+   * The same fold the exporter runs, so a commit analysed here and a commit
+   * analysed in CI cannot disagree about what the code contains. The module has
+   * no clock, so the timing is measured out here across exactly the call.
+   */
+  dataset(repo: string, config = ''): { json: string; ms: number } {
+    const [rp, rl] = this.put(repo);
+    const [cp, cl] = this.put(config);
+    const started = performance.now();
+    const json = this.take(this.ex.cqx_dataset(rp, rl, cp, cl));
+    const ms = Math.round(performance.now() - started);
+    this.ex.cqx_free(rp, rl);
+    this.ex.cqx_free(cp, cl);
+    return { json, ms };
   }
 }
