@@ -5,6 +5,7 @@ import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
 import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
 import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
 import { ElevationRail, type Elevation } from './ElevationRail';
+import { RepoInput } from './RepoInput';
 import { ThemePicker } from './ThemePicker';
 import { TimeMachine } from './TimeMachine';
 import { ScoreLevel } from './levels/Score';
@@ -279,22 +280,11 @@ export function Explorer() {
               repoIndex?.repo ?? source ?? 'loading…'
             )}
           </span>
-          {/* One report needs no picker; several do. */}
-          {catalog && catalog.entries.length > 1 ? (
-          <label className="picker">
-            <span className="dim">repo</span>
-            <select
-              value={source}
-              onChange={(e) =>
-                go({ repo: e.target.value, pkg: null, file: null, ref: null, level: 'L0' })
-              }
-            >
-              {catalog.entries.map((entry) => (
-                <option key={entry.repo} value={entry.repo}>{entry.repo}</option>
-              ))}
-            </select>
-          </label>
-          ) : null}
+          <RepoInput
+            value={source}
+            suggestions={catalog?.entries.map((e) => e.repo) ?? []}
+            onOpen={(repo) => go({ repo, pkg: null, file: null, ref: null, level: 'L0' })}
+          />
           <span className="tot">
             {data ? (
               <>
@@ -319,9 +309,12 @@ export function Explorer() {
       <div className="wrap shell">
         <div className="sidebar">
           <ElevationRail levels={levels} current={level} onSelect={(id) => go({ level: id })} />
+          {/* Empty slots read as "still arriving". Nothing is arriving for a
+              repository that has no timeline to fetch, so the rail goes with
+              the elevations rather than sitting there pretending. */}
           <TimeMachine
             commits={timeline}
-            slots={TIME_MACHINE_SLOTS}
+            slots={error ? 0 : TIME_MACHINE_SLOTS}
             current={commit}
             onSelect={(i) => go({ ref: timeline[i]?.short ?? null, level: 'L0' })}
           />
