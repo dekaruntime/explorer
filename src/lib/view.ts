@@ -3,7 +3,7 @@
  *
  * A URL should name the thing it shows, and be editable by hand:
  *
- *   /dekaruntime/deka/7e8321c7/packages/deka_http/functions
+ *   /{org}/{repo}/{commit}/packages/{package}/functions
  *
  * Reads as: this repository, at this commit, that package, its functions. Every
  * prefix of it is also a valid address, which is what makes it hackable — cut
