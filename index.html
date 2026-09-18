@@ -36,18 +36,23 @@ header{border-bottom:1px solid var(--line)}
 .shell{display:grid;grid-template-columns:184px 1fr;gap:26px;padding-block:22px 60px;align-items:start}
 @media(max-width:860px){.shell{grid-template-columns:1fr;gap:14px}}
 .rail{display:flex;flex-direction:column;gap:1px}
-.shell>div:first-child{position:sticky;top:12px;display:flex;flex-direction:column;gap:22px}
+.shell>div:first-child{position:sticky;top:12px;display:flex;flex-direction:column;gap:18px}
 @media(max-width:860px){.shell>div:first-child{position:static;gap:12px}}
-.rail.tm .t{color:var(--muted);font-weight:600}
-.rail.tm .n{font-family:var(--mono);font-size:12.5px;letter-spacing:-.01em}
+.rail.tm h3{margin-bottom:5px}
+/* A denser rail than Elevation: these are timestamps, not destinations, so the
+   hash leads and everything around it gives way. */
+.rail.tm .lvl{padding:4px 8px;grid-template-columns:18px 1fr;gap:7px;line-height:1.2}
+.rail.tm .t{color:var(--faint);font-weight:600;font-size:9.5px}
+.rail.tm .n{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:-.02em}
+.rail.tm .c{font-size:9.5px;letter-spacing:0}
 .rail.tm .lvl[aria-current="true"] .t{color:var(--aink)}
-.tmnote{font-family:var(--mono);font-size:10.5px;color:var(--faint);padding:6px 10px 0;max-width:184px;line-height:1.4}
+.tmnote{font-family:var(--mono);font-size:9.5px;color:var(--faint);padding:5px 8px 0;max-width:184px;line-height:1.35}
 /* A commit is scored by fetching and extracting it, so the rail fills in as
    each one lands rather than withholding the whole menu. */
 .lvl.pending{cursor:default}
 .lvl.pending .n,.lvl.pending .c{color:transparent;position:relative;display:inline-block;border-radius:3px;
-  background:var(--soft);min-width:70px;animation:pulse 1.15s ease-in-out infinite}
-.lvl.pending .c{min-width:52px}
+  background:var(--soft);min-width:66px;animation:pulse 1.15s ease-in-out infinite}
+.lvl.pending .c{min-width:44px;height:9px}
 .lvl.pending .t{color:var(--faint)}
 @keyframes pulse{0%,100%{opacity:.45}50%{opacity:.9}}
 @media(prefers-reduced-motion:reduce){.lvl.pending .n,.lvl.pending .c{animation:none;opacity:.6}}
