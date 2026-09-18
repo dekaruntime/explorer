@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Dataset } from '../lib/types';
-import { loadCatalog, type Catalog } from '../lib/catalog';
+import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
 import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
 import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
 import { ElevationRail, type Elevation } from './ElevationRail';
@@ -15,6 +15,21 @@ import { TypesLevel } from './levels/Types';
 import { FunctionsLevel } from './levels/Functions';
 
 const TIME_MACHINE_SLOTS = 5;
+
+/** The deployment's own mark, beside the repository it is showing. */
+function BrandMark({ brand }: { brand: Brand }) {
+  const inner = (
+    <>
+      {brand.icon ? <img src={brand.icon} alt="" width={30} height={30} /> : null}
+      {brand.name}
+    </>
+  );
+  return brand.href ? (
+    <a className="brand" href={brand.href}>{inner}</a>
+  ) : (
+    <span className="brand">{inner}</span>
+  );
+}
 
 /**
  * The explorer.
@@ -211,7 +226,15 @@ export function Explorer() {
     <>
       <header>
         <div className="wrap hdr">
-          <span className="brand">c<b>q</b>x</span>
+          {/* Whose deployment this is, if it said. The mark is deka's on
+              explorer.deka.gg and absent on a directory somebody exported of
+              their own repository — which is the whole reason it is declared
+              rather than built in. */}
+          {catalog?.brand ? (
+            <BrandMark brand={catalog.brand} />
+          ) : (
+            <span className="brand">c<b>q</b>x</span>
+          )}
           <span className="repo">
             {repoIndex?.commits_url ? (
               <a className="tmlink" href={repoIndex.commits_url} target="_blank" rel="noopener">
@@ -320,7 +343,9 @@ export function Explorer() {
 
       <footer className="colophon">
         powered by{' '}
-        <a href="https://github.com/samifouad/cqx" target="_blank" rel="noopener">cqx</a>
+        <a className="cqx" href="https://github.com/samifouad/cqx" target="_blank" rel="noopener">
+          c<b>q</b>x
+        </a>
         {' '}by{' '}
         <a href="https://samifou.ad" target="_blank" rel="noopener">Sami Fouad</a>
         <ThemePicker />

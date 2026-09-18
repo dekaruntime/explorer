@@ -8,11 +8,28 @@
  * ago. Anything not listed is still reachable by typing its address.
  */
 
+/** Whose deployment this is. Absent leaves the header unbranded. */
+export interface Brand {
+  /** The name beside the mark, and what it reads as without one. */
+  name: string;
+  /** A square image, served by this deployment. */
+  icon?: string;
+  /** Where the mark links to. */
+  href?: string;
+}
+
 export interface Catalog {
   /** `owner/name`, as the host spells it. */
   entries: { repo: string }[];
   /** Which to open with; the first entry when unstated. */
   default: string | null;
+  /**
+   * Whose deployment this is. Declared rather than built in, for the same
+   * reason the repository list is: one build serves explorer.deka.gg and a
+   * directory somebody exported of their own repository, and only one of those
+   * is deka's.
+   */
+  brand: Brand | null;
   /**
    * Datasets this deployment serves itself, as a base path — what
    * `cqx export --out public/data` produces. Absent means it serves none, and
@@ -23,7 +40,7 @@ export interface Catalog {
 }
 
 /** No manifest: nothing has been declared, so look locally before giving up. */
-const UNDECLARED: Catalog = { entries: [], default: null, store: '/data' };
+const UNDECLARED: Catalog = { entries: [], default: null, store: '/data', brand: null };
 
 export async function loadCatalog(): Promise<Catalog> {
   try {
@@ -39,6 +56,7 @@ export async function loadCatalog(): Promise<Catalog> {
       entries,
       default: raw.default ?? entries[0]?.repo ?? null,
       store: raw.store ?? null,
+      brand: raw.brand ?? null,
     };
   } catch {
     return UNDECLARED;
