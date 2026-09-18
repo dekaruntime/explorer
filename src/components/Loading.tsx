@@ -107,23 +107,31 @@ export function Phases({ stage }: { stage: Stage }) {
               : `${stage.total} files`
         }
       />
-      <Analysis running={fetched} total={stage.total} />
+      <Analysis running={fetched} done={stage.done} total={stage.total} />
     </div>
   );
 }
 
 /**
- * The parse. It has no progress to report — it is one call into the module —
- * so it reports the clock instead, which after the first few seconds is the
- * thing a reader actually wants to know.
+ * The parse, which now says how far along it is: the module is handed a
+ * function and calls it as each file is done. The clock stays, because over
+ * two minutes a fraction alone is not much comfort.
  */
-function Analysis({ running, total }: { running: boolean; total: number }) {
+function Analysis({ running, done, total }: { running: boolean; done: number; total: number }) {
   const seconds = useElapsed(running);
+  const counting = total > 0 && done > 0;
   return (
     <Phase
       label="running analysis"
       state={running ? 'running' : 'waiting'}
-      detail={running ? (seconds > 2 ? `${seconds}s · ${total} files` : `${total} files`) : undefined}
+      // Known only once the first file is through; until then there is
+      // genuinely nothing to report and the bar says so.
+      fraction={running && counting ? Math.min(1, done / total) : undefined}
+      detail={
+        running
+          ? `${counting ? `${done.toLocaleString()} of ${total.toLocaleString()}` : `${total.toLocaleString()} files`}${seconds > 2 ? ` · ${seconds}s` : ''}`
+          : undefined
+      }
     />
   );
 }

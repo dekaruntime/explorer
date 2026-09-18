@@ -21,6 +21,9 @@ interface Exports {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+/** Called once per file, as the module parses it. */
+export type Tick = () => void;
+
 export class Analysis {
   private constructor(private readonly ex: Exports) {}
 
@@ -40,13 +43,19 @@ export class Analysis {
    */
   private static compiled: Promise<WebAssembly.Module> | null = null;
 
-  static async load(url: string): Promise<Analysis> {
+  static async load(url: string, onFile: Tick = () => {}): Promise<Analysis> {
     // Streaming compilation starts before the download finishes, which matters
     // for a two-megabyte module on a slow connection.
     Analysis.compiled ??= WebAssembly.compileStreaming(fetch(url)).catch(async () =>
       WebAssembly.compile(await (await fetch(url)).arrayBuffer()),
     );
-    const instance = await WebAssembly.instantiate(await Analysis.compiled, {});
+    // The module cannot report progress on its own — it holds the thread until
+    // it returns — so it is given something to call. Without this it will not
+    // instantiate at all, which is the point: a module that silently reported
+    // nothing would be worse.
+    const instance = await WebAssembly.instantiate(await Analysis.compiled, {
+      cqx: { parsed_one: onFile },
+    });
     return new Analysis(instance.exports as unknown as Exports);
   }
 
