@@ -6,11 +6,15 @@
  *   <org>/<repo>/index.json      the timeline
  *   <org>/<repo>/<commit>.json   that commit, and only that commit
  *
- * Three places are tried in order, which is what keeps the explorer neutral.
- * A developer who ran `cqx export` beside their own build is served from it. A
- * deployment with a shared store — explorer.deka.gg has one at cqxdata.deka.gg,
- * a bucket with CORS and a domain — falls through to that. Anything neither has
+ * Where to read one from is declared, not discovered. A deployment that
+ * exported datasets beside itself says so in its manifest; everything else
+ * falls through to the shared store — explorer.deka.gg has one at
+ * cqxdata.deka.gg, a bucket with CORS and a domain — and anything neither has
  * seen is analysed in the browser from the repository itself.
+ *
+ * Declaring it rather than probing for it matters under a single-page
+ * fallback, where an unmatched path is answered with the page: a probe cannot
+ * 404, so every miss costs a full round trip and is then thrown away.
  *
  * A dataset is named by its commit and describes nothing else, so it is
  * immutable: once fetched it can be cached forever and never revalidated.
@@ -23,8 +27,16 @@ export const STORE: string = (
   import.meta.env.PUBLIC_CQX_STORE ?? 'https://cqxdata.deka.gg'
 ).replace(/\/$/, '');
 
-/** Datasets exported beside this deployment, if there are any. */
-const LOCAL = '/data';
+/**
+ * Where this deployment keeps its own datasets, if it keeps any. Set from the
+ * manifest, which is the only thing that knows — `cqx export --out public/data`
+ * beside a build writes `"store": "/data"` into it.
+ */
+let declared: string | null = null;
+
+export function useStore(base: string | null) {
+  declared = base ? base.replace(/\/$/, '') : null;
+}
 
 export interface RepoIndex {
   repo: string;
@@ -53,22 +65,18 @@ async function json<T>(url: string): Promise<T | null> {
   }
 }
 
-const bases = (): string[] => (STORE ? [LOCAL, STORE] : [LOCAL]);
+const bases = (): string[] => [declared, STORE].filter((b): b is string => !!b);
 
-async function first<T>(path: string): Promise<{ value: T; from: string } | null> {
+async function first<T>(path: string): Promise<T | null> {
   for (const base of bases()) {
     const value = await json<T>(`${base}/${path}`);
-    if (value) return { value, from: base };
+    if (value) return value;
   }
   return null;
 }
 
-export async function loadIndex(repo: string): Promise<RepoIndex | null> {
-  const found = await first<RepoIndex>(`${repo}/index.json`);
-  return found?.value ?? null;
-}
+export const loadIndex = (repo: string): Promise<RepoIndex | null> =>
+  first<RepoIndex>(`${repo}/index.json`);
 
-export async function loadDataset(repo: string, commit: string): Promise<Dataset | null> {
-  const found = await first<Dataset>(`${repo}/${commit}.json`);
-  return found?.value ?? null;
-}
+export const loadDataset = (repo: string, commit: string): Promise<Dataset | null> =>
+  first<Dataset>(`${repo}/${commit}.json`);
