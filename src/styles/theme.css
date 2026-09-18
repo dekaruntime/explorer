@@ -211,6 +211,12 @@ tbody tr:hover { background: var(--raised); }
 .legend .f { background: var(--fail); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
 .legend .w { background: var(--warn); }
 .legend .p { background: var(--pass); border-radius: 50%; }
+.empty .bar {
+  height: 3px; margin: 14px auto; max-width: 420px;
+  background: var(--soft); border-radius: 2px; overflow: hidden;
+}
+.empty .bar i { display: block; height: 100%; background: var(--aink); transition: width .2s ease; }
+.empty .dim { font-size: 12px; margin-top: 10px; }
 .empty { padding: 38px 18px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; }
 
 .colophon {
