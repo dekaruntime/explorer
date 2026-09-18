@@ -146,6 +146,9 @@ h2 { margin: 0 0 3px; font-size: 24px; letter-spacing: -.02em; text-wrap: balanc
 .ring svg { width: 62px; height: 62px; display: block; }
 .ring .tr { fill: none; stroke-width: 4; opacity: .35; }
 .ring .ar { fill: none; stroke-width: 4; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
+/* The arc is swept in JavaScript so it stays in step with the figure; only the
+   colour crosses a band on its own, and that is worth easing. */
+.ring .ar, .ring .tr, .ring .nm { transition: stroke .3s ease, fill .3s ease; }
 .ring .nm { font-family: var(--mono); font-size: 19px; font-weight: 600; dominant-baseline: central; text-anchor: middle; }
 .ring .cap { font-size: 12.5px; font-weight: 500; color: var(--ink); }
 .ring .dl { font-family: var(--mono); font-size: 9.5px; color: var(--faint); letter-spacing: -.01em; }
