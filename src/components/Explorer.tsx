@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { Dataset } from '../lib/types';
 import { ElevationRail, type Elevation } from './ElevationRail';
+import { ThemePicker } from './ThemePicker';
 import { TimeMachine } from './TimeMachine';
 import { ScoreLevel } from './levels/Score';
 import { SystemLevel } from './levels/System';
@@ -40,7 +41,9 @@ export function Explorer() {
     let live = true;
     setData(null);
     setError(null);
-    fetch(`${import.meta.env.BASE_URL}data/${source}.json`)
+    // Relative to the document, not to the origin: the site has to work when
+    // it is served from a subpath as well as from a domain root.
+    fetch(`./data/${source}.json`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status} fetching ${source}`))))
       .then((d: Dataset) => { if (live) setData(d); })
       .catch((e: Error) => { if (live) setError(e.message); });
@@ -183,6 +186,14 @@ export function Explorer() {
           )}
         </main>
       </div>
+
+      <footer className="colophon">
+        powered by{' '}
+        <a href="https://github.com/samifouad/cqx" target="_blank" rel="noopener">cqx</a>
+        {' '}by{' '}
+        <a href="https://samifou.ad" target="_blank" rel="noopener">Sami Fouad</a>
+        <ThemePicker />
+      </footer>
     </>
   );
 }
