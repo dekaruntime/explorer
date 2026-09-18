@@ -24,6 +24,7 @@ const TIME_MACHINE_SLOTS = 5;
 /** Datasets committed alongside the site, analysed ahead of time. */
 const PREBAKED = [
   { id: 'deka', label: 'dekaruntime/deka' },
+  { id: 'dsc', label: 'dekaruntime/dsc' },
 ] as const;
 
 export function Explorer() {
@@ -110,6 +111,14 @@ export function Explorer() {
               data?.repo ?? 'loading…'
             )}
           </span>
+          <label className="picker">
+            <span className="dim">repo</span>
+            <select value={source} onChange={(e) => { setSource(e.target.value); setPkg(null); setFile(null); setCommit(0); setLevel('L0'); }}>
+              {PREBAKED.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+          </label>
           <span className="tot">
             {data ? (
               <>
@@ -125,8 +134,6 @@ export function Explorer() {
       <div className="wrap shell">
         <div className="sidebar">
           <ElevationRail levels={levels} current={level} onSelect={setLevel} />
-          {/* Unused for now, but the source is what a repo picker will set. */}
-          {source ? null : null}
           <TimeMachine
             commits={timeline}
             slots={TIME_MACHINE_SLOTS}
