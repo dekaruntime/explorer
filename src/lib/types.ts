@@ -13,6 +13,11 @@ export interface Finding {
   what: string;
   file: string;
   line: number;
+  /** Which part of the line, `[start, end)`. Absent when the finding is about
+   *  a whole file or crate and has no part to point at. */
+  col?: [number, number];
+  /** The line itself, so the code can be shown rather than described. */
+  text?: string;
 }
 
 export interface Rule {

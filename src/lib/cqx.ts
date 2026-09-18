@@ -21,8 +21,13 @@ interface Exports {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-/** Called once per file, as the module parses it. */
-export type Tick = () => void;
+/** What the module tells the host as it works. */
+export interface Watch {
+  /** How many files it is about to read. Said once, before any of them. */
+  total: (files: number) => void;
+  /** One file done. */
+  one: () => void;
+}
 
 export class Analysis {
   private constructor(private readonly ex: Exports) {}
@@ -43,7 +48,10 @@ export class Analysis {
    */
   private static compiled: Promise<WebAssembly.Module> | null = null;
 
-  static async load(url: string, onFile: Tick = () => {}): Promise<Analysis> {
+  static async load(
+    url: string,
+    watch: Watch = { total: () => {}, one: () => {} },
+  ): Promise<Analysis> {
     // Streaming compilation starts before the download finishes, which matters
     // for a two-megabyte module on a slow connection.
     Analysis.compiled ??= WebAssembly.compileStreaming(fetch(url)).catch(async () =>
@@ -54,7 +62,7 @@ export class Analysis {
     // instantiate at all, which is the point: a module that silently reported
     // nothing would be worse.
     const instance = await WebAssembly.instantiate(await Analysis.compiled, {
-      cqx: { parsed_one: onFile },
+      cqx: { parsing_total: watch.total, parsed_one: watch.one },
     });
     return new Analysis(instance.exports as unknown as Exports);
   }
