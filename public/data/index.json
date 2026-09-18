@@ -1,8 +1,8 @@
 {
-  "_comment": "Which reports this deployment serves. Content, not code — the explorer renders whatever is listed here.",
+  "_comment": "Which repositories this deployment opens with. Content, not code. Anything not listed is still reachable by typing its address.",
   "default": "dekaruntime/deka",
   "entries": [
-    { "repo": "dekaruntime/deka", "file": "deka" },
-    { "repo": "dekaruntime/dsc", "file": "dsc" }
+    { "repo": "dekaruntime/deka" },
+    { "repo": "dekaruntime/dsc" }
   ]
 }
