@@ -6,15 +6,26 @@
   "name": "cqx-web",
   "compatibility_date": "2026-09-18",
 
-  // Static assets with no Worker script: there is no server here. The analysis
-  // runs in the visitor's browser, so every request is a file.
+  // One server, for one thing. Three calls to GitHub are metered and the rest
+  // of the traffic is not: file contents go from the CDN straight to the
+  // browser and never pass through here. Everything under /gh/ is those three,
+  // answered from the bucket where it can be; everything else is the site.
+  "main": "worker/index.ts",
+
   // Addresses are paths — /dekaruntime/deka/7e8321c7/packages/deka_http — and
   // none of them is a file on disk, so anything that does not match an asset is
   // served the page and routed there.
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
+
+  // The same bucket the datasets live in, so what is learned about a
+  // repository sits beside what was measured of it.
+  "r2_buckets": [
+    { "binding": "CACHE", "bucket_name": "cqx" }
+  ],
 
   "observability": {
     "enabled": true
