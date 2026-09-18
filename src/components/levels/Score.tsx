@@ -1,6 +1,7 @@
 import type { Commit, Score } from "../../lib/types";
 import { band } from "../../lib/types";
 import { useEased } from "../../lib/animate";
+import { Finding } from "../Finding";
 
 const CATEGORY_MEANING: Record<string, string> = {
   quality:
@@ -202,13 +203,7 @@ export function ScoreLevel({
                       </summary>
                       <div className="flist">
                         {rule.findings.map((f, i) => (
-                          <div key={i}>
-                            <span className="f">
-                              {f.file}
-                              {f.line ? `:${f.line}` : ""}
-                            </span>
-                            <span className="w">{f.what}</span>
-                          </div>
+                          <Finding key={i} finding={f} remedy={rule.remedy} />
                         ))}
                         {rule.total_findings > rule.findings.length ? (
                           <div>
