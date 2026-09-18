@@ -17,6 +17,12 @@ import { FunctionsLevel } from './levels/Functions';
 const TIME_MACHINE_SLOTS = 5;
 
 /**
+ * Milliseconds as seconds, to one place — except below a tenth, where one
+ * place would round a real measurement down to nothing.
+ */
+const seconds = (ms: number): string => (ms / 1000).toFixed(ms < 100 ? 2 : 1);
+
+/**
  * The deployment's own mark. The name carries it only when there is no image —
  * a mark and its wordmark beside each other says the same thing twice.
  */
@@ -273,10 +279,8 @@ export function Explorer() {
                 {typeof data.analysis?.ms === 'number' ? (
                   <>
                     {' · analyzed in '}
-                    <b title={`cqx ${data.analysis.cqx}`}>
-                      {data.analysis.ms.toLocaleString()}
-                    </b>
-                    {' ms'}
+                    <b title={`cqx ${data.analysis.cqx}`}>{seconds(data.analysis.ms)}</b>
+                    s
                   </>
                 ) : null}
               </>
