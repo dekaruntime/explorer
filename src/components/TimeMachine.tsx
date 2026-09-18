@@ -25,6 +25,8 @@ export type TimeMachineTab = 'releases' | 'commits';
 export function TimeMachine({
   commits,
   releases,
+  releasesTrouble,
+  trouble,
   slots,
   active,
   tab,
@@ -35,6 +37,10 @@ export function TimeMachine({
   commits: Commit[];
   /** Null while the list is still being asked for. */
   releases: ReleaseRef[] | null;
+  /** Why the release list is empty, when it is empty for a reason. */
+  releasesTrouble?: string;
+  /** Why the rail has nothing to show, when that is not the repository's fault. */
+  trouble?: string | null;
   slots: number;
   /** The short sha currently addressed, however this view was reached. */
   active: string | null;
@@ -74,7 +80,9 @@ export function TimeMachine({
           releases === null ? (
             <div className="tmnote">loading releases…</div>
           ) : releases.length === 0 ? (
-            <div className="tmnote">no releases published.</div>
+            // Empty for a reason and empty because there are none are different
+            // things, and only one of them is about the repository.
+            <div className="tmnote">{releasesTrouble ?? 'no releases published.'}</div>
           ) : (
             releases.map((r) => (
               <button
@@ -128,7 +136,7 @@ export function TimeMachine({
               );
             })}
             {commits.length < slots ? (
-              <div className="tmnote">scoring {slots} commits…</div>
+              <div className="tmnote">{trouble ?? `scoring ${slots} commits…`}</div>
             ) : null}
           </>
         )}
