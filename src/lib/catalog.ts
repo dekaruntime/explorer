@@ -10,7 +10,7 @@
 
 /** Whose deployment this is. Absent leaves the header unbranded. */
 export interface Brand {
-  /** The name beside the mark, and what it reads as without one. */
+  /** What the mark is called: its alt text, and the mark itself without one. */
   name: string;
   /** A square image, served by this deployment. */
   icon?: string;

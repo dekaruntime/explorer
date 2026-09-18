@@ -16,18 +16,20 @@ import { FunctionsLevel } from './levels/Functions';
 
 const TIME_MACHINE_SLOTS = 5;
 
-/** The deployment's own mark, beside the repository it is showing. */
+/**
+ * The deployment's own mark. The name carries it only when there is no image —
+ * a mark and its wordmark beside each other says the same thing twice.
+ */
 function BrandMark({ brand }: { brand: Brand }) {
-  const inner = (
-    <>
-      {brand.icon ? <img src={brand.icon} alt="" width={30} height={30} /> : null}
-      {brand.name}
-    </>
+  const inner = brand.icon ? (
+    <img src={brand.icon} alt={brand.name} width={30} height={30} />
+  ) : (
+    brand.name
   );
   return brand.href ? (
-    <a className="brand" href={brand.href}>{inner}</a>
+    <a className="brand" href={brand.href} title={brand.name}>{inner}</a>
   ) : (
-    <span className="brand">{inner}</span>
+    <span className="brand" title={brand.name}>{inner}</span>
   );
 }
 
