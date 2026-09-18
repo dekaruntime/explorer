@@ -25,17 +25,33 @@ const seconds = (ms: number): string => (ms / 1000).toFixed(ms < 100 ? 2 : 1);
 /**
  * The deployment's own mark. The name carries it only when there is no image —
  * a mark and its wordmark beside each other says the same thing twice.
+ *
+ * A mark pointing somewhere in this deployment is routed rather than followed:
+ * reloading the page to reach a view the page can already render costs a
+ * second for nothing. It stays a real link, so opening it in a tab still
+ * works — only a plain click is taken over.
  */
-function BrandMark({ brand }: { brand: Brand }) {
+function BrandMark({ brand, onHome }: { brand: Brand; onHome: () => void }) {
   const inner = brand.icon ? (
     <img src={brand.icon} alt={brand.name} width={30} height={30} />
   ) : (
     brand.name
   );
-  return brand.href ? (
-    <a className="brand" href={brand.href} title={brand.name}>{inner}</a>
-  ) : (
-    <span className="brand" title={brand.name}>{inner}</span>
+  if (!brand.href) return <span className="brand" title={brand.name}>{inner}</span>;
+  const local = brand.href.startsWith('/');
+  return (
+    <a
+      className="brand"
+      href={brand.href}
+      title={brand.name}
+      onClick={(e) => {
+        if (!local || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        e.preventDefault();
+        onHome();
+      }}
+    >
+      {inner}
+    </a>
   );
 }
 
@@ -239,7 +255,18 @@ export function Explorer() {
               their own repository — which is the whole reason it is declared
               rather than built in. */}
           {catalog?.brand ? (
-            <BrandMark brand={catalog.brand} />
+            <BrandMark
+              brand={catalog.brand}
+              onHome={() =>
+                go({
+                  repo: catalog.default ?? source,
+                  ref: null,
+                  pkg: null,
+                  file: null,
+                  level: 'L0',
+                })
+              }
+            />
           ) : (
             <span className="brand">c<b>q</b>x</span>
           )}
