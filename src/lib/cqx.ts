@@ -24,13 +24,29 @@ const decoder = new TextDecoder();
 export class Analysis {
   private constructor(private readonly ex: Exports) {}
 
+  /**
+   * The compiled module, kept; the instance, not.
+   *
+   * Linear memory only ever grows. A module that has just read a repository of
+   * six thousand files is holding gigabytes it will never give back, and the
+   * next repository analysed in the same instance allocates against whatever
+   * is left of the four the format allows. That is not a slow failure — the
+   * allocator returns nothing and the glue reads a length out of unmapped
+   * memory, which is the "offset is out of bounds" a small repository reported
+   * after a large one.
+   *
+   * Compiling is the expensive half and it is cached by the browser, so a new
+   * instance per analysis costs little and starts from an empty heap.
+   */
+  private static compiled: Promise<WebAssembly.Module> | null = null;
+
   static async load(url: string): Promise<Analysis> {
-    const source = fetch(url);
     // Streaming compilation starts before the download finishes, which matters
     // for a two-megabyte module on a slow connection.
-    const { instance } = await WebAssembly.instantiateStreaming(source, {}).catch(
-      async () => WebAssembly.instantiate(await (await fetch(url)).arrayBuffer(), {}),
+    Analysis.compiled ??= WebAssembly.compileStreaming(fetch(url)).catch(async () =>
+      WebAssembly.compile(await (await fetch(url)).arrayBuffer()),
     );
+    const instance = await WebAssembly.instantiate(await Analysis.compiled, {});
     return new Analysis(instance.exports as unknown as Exports);
   }
 
@@ -38,14 +54,28 @@ export class Analysis {
   private put(text: string): [number, number] {
     const bytes = encoder.encode(text);
     const ptr = this.ex.cqx_alloc(bytes.length);
+    // Nothing is mapped at zero. An allocator that has run out says so this
+    // way, and writing there would corrupt the module rather than fail.
+    if (ptr === 0 && bytes.length > 0) {
+      throw new Error('cqx ran out of memory: this repository is too large to analyse here.');
+    }
     new Uint8Array(this.ex.memory.buffer).set(bytes, ptr);
     return [ptr, bytes.length];
   }
 
   /** Reads a length-prefixed reply and releases it. */
   private take(ptr: number): string {
-    const view = new DataView(this.ex.memory.buffer);
-    const len = view.getUint32(ptr, true);
+    const size = this.ex.memory.buffer.byteLength;
+    if (ptr === 0 || ptr + 4 > size) {
+      throw new Error('cqx returned nothing: it ran out of memory part way through.');
+    }
+    const len = new DataView(this.ex.memory.buffer).getUint32(ptr, true);
+    // A length read out of memory the module never wrote is the shape a failed
+    // allocation takes on the way back. Saying so beats a decoder complaining
+    // about an offset.
+    if (ptr + 4 + len > size) {
+      throw new Error('cqx returned a reply longer than its own memory; it ran out part way through.');
+    }
     const text = decoder.decode(new Uint8Array(this.ex.memory.buffer, ptr + 4, len));
     this.ex.cqx_free(ptr, 4 + len);
     return text;
