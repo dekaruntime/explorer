@@ -58,13 +58,20 @@ function Ring({
         {category[0]?.toUpperCase()}
         {category.slice(1)}
       </span>
-      {/* Silent when nothing moved: an unchanged score is the common case. */}
-      {delta !== null && delta !== 0 && since ? (
-        <span className={`dl ${delta > 0 ? "up" : "dn"}`}>
-          {delta > 0 ? "+" : ""}
-          {delta} since commit {since}
-        </span>
-      ) : null}
+      {/* Always here, even when it has nothing to say. An unchanged score is
+          the common case, so a line that appears only on movement makes most
+          rings shorter than the rest and moves every one of them whenever a
+          commit changes something. */}
+      <span className={`dl ${delta && delta > 0 ? "up" : delta ? "dn" : ""}`}>
+        {delta && since ? (
+          <>
+            {delta > 0 ? "+" : ""}
+            {delta} since commit {since}
+          </>
+        ) : (
+          "\u00a0"
+        )}
+      </span>
     </button>
   );
 }
@@ -99,21 +106,19 @@ export function ScoreLevel({
   return (
     <div>
       <h2>CodeQuality Score</h2>
-      {!head && (commit || at) ? (
-        <div className="scope">
-          viewing <b>{commit?.short ?? at}</b>
-          {commit
-            ? ` · ${commit.subject}`
-            : " · not among the commits on the rail"}
-          <button onClick={onBackToHead}>back to head</button>
-        </div>
-      ) : (
-        <p className="lede">
-          Every category starts at 100 and is degraded only by a named rule with
-          a published weight and a cap. Each section below says what was
-          measured, why it counts, and what to do about it.
-        </p>
-      )}
+      {/* The same line at every commit, head included. Explaining the scoring
+          only at head made that one page taller than all the others, so every
+          step through the time machine moved the rings. */}
+      <div className="scope">
+        viewing <b>{commit?.short ?? at ?? '—'}</b>
+        {commit ? <> · {commit.subject}</> : at ? ' · not among the commits on the rail' : null}
+        {/* Present at head too, just not offered: a button that appears only
+            on older commits makes this line taller there, and moves every ring
+            beneath it by four pixels on the way in and out. */}
+        <button onClick={onBackToHead} style={head ? { visibility: 'hidden' } : undefined}>
+          back to head
+        </button>
+      </div>
 
       <div className="rings">
         {Object.entries(scores).map(([category, value]) => (
