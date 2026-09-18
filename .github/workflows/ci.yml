@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: typecheck · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Cloudflare Pages builds main on its own, so this exists to catch a break
+      # on the pull request rather than after it has already deployed.
+      - run: npm run check
+      - run: npm run build
+      - name: Report what would ship
+        run: |
+          echo "| file | size |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          find dist -type f -printf '| %p | %s bytes |\n' 2>/dev/null \
+            | sort >> "$GITHUB_STEP_SUMMARY" \
+            || find dist -type f -exec stat -f '| %N | %z bytes |' {} + | sort >> "$GITHUB_STEP_SUMMARY"
