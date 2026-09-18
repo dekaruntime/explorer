@@ -1,5 +1,5 @@
 {
-  "_comment": "This deployment's content: whose it is, which repositories it opens with, and where its own datasets live if it has any. Not code — the explorer renders whatever is here.",
+  "_comment": "This deployment's content: whose it is, which repositories it opens with, and where its own datasets live if it has any. Not code \u2014 the explorer renders whatever is here.",
   "brand": {
     "name": "deka",
     "icon": "/brand/deka.png",
@@ -7,7 +7,11 @@
   },
   "default": "dekaruntime/deka",
   "entries": [
-    { "repo": "dekaruntime/deka" },
-    { "repo": "dekaruntime/dsc" }
+    {
+      "repo": "dekaruntime/deka"
+    },
+    {
+      "repo": "dekaruntime/dsc"
+    }
   ]
 }
