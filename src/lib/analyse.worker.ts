@@ -86,26 +86,33 @@ self.onmessage = async (event: MessageEvent<Request>) => {
 
     const began = performance.now();
     post({ type: 'stage', phase: 'listing', done: 0, total: 0, cached: 0 });
-    // Counted here rather than in the module, which knows how many it has
-    // parsed but not how many it was given. Reported no more often than the
-    // screen can show — a repository of six thousand files would otherwise
-    // post six thousand messages to draw sixty frames.
+    // The module says how many files it will read, because only it knows: a
+    // repository holds more .rs files than its crates claim, and counting what
+    // was fetched made a finished analysis look stalled at forty-five per cent.
+    // Reported no more often than a screen can show — six thousand messages to
+    // draw sixty frames is waste.
     let parsed = 0;
     let announced = 0;
     let expected = 0;
-    const onFile = () => {
-      parsed += 1;
-      if (parsed - announced >= 25 || parsed === expected) {
-        announced = parsed;
-        post({ type: 'stage', phase: 'analysing', done: parsed, total: expected, cached: 0 });
-      }
+    const watch = {
+      total: (files: number) => {
+        expected = files;
+        post({ type: 'stage', phase: 'analysing', done: 0, total: files, cached: 0 });
+      },
+      one: () => {
+        parsed += 1;
+        if (parsed - announced >= 25 || parsed === expected) {
+          announced = parsed;
+          post({ type: 'stage', phase: 'analysing', done: parsed, total: expected, cached: 0 });
+        }
+      },
     };
 
     // A new instance each time, and the last one goes. Linear memory never
     // shrinks, so an instance that has read a large repository would hand the
     // next one a heap already spent. The compiled module is kept and reused;
     // it is the expensive half and it holds nothing.
-    const [cqx, tree] = await Promise.all([Analysis.load(wasm, onFile), fetchTree(repo, sha)]);
+    const [cqx, tree] = await Promise.all([Analysis.load(wasm, watch), fetchTree(repo, sha)]);
 
     if (tree.truncated) {
       throw new Error(`${repo} is too large for GitHub to list in one request.`);
@@ -120,8 +127,8 @@ self.onmessage = async (event: MessageEvent<Request>) => {
     // Everything up to here is network and cache. What follows is this machine.
     const fetched = Math.round(performance.now() - began);
 
-    expected = files.length;
-    post({ type: 'stage', phase: 'analysing', done: 0, total: expected, cached: 0 });
+    // The count comes from the module, once it has read the manifests.
+    post({ type: 'stage', phase: 'analysing', done: 0, total: 0, cached: 0 });
     cqx.reset(repo);
     for (const file of files) cqx.addFile(file.path, file.content);
 

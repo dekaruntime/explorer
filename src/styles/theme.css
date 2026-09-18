@@ -219,10 +219,6 @@ h2 { margin: 0 0 3px; font-size: 24px; letter-spacing: -.02em; text-wrap: balanc
 .rule summary { font-family: var(--mono); font-size: 11.5px; color: var(--aink); cursor: pointer; list-style: none; }
 .rule summary::-webkit-details-marker { display: none; }
 .rule summary:hover { text-decoration: underline; }
-.flist { font-family: var(--mono); font-size: 11.5px; margin-top: 8px; display: grid; gap: 2px; }
-.flist div { display: flex; gap: 10px; }
-.flist .f { color: var(--faint); white-space: nowrap; }
-.flist .w { color: var(--muted); overflow-wrap: anywhere; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(204px, 1fr)); gap: 9px; }
 .card { background: var(--surface); border: 1px solid var(--soft); border-radius: 8px; padding: 11px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 7px; text-align: left; font-family: var(--ui); color: var(--ink); }
@@ -359,3 +355,29 @@ main { min-height: 72vh; }
     animation-duration: 140ms;
   }
 }
+
+/* A finding, shown the way a compiler shows one: where it is, the code, and
+   what is wrong with it — in that order, because that is the order a reader
+   asks the questions in. */
+.flist { display: flex; flex-direction: column; gap: 10px; margin-top: 9px; }
+.dg { border-left: 2px solid var(--line); padding-left: 11px; }
+.dgl { font-family: var(--mono); font-size: 11.5px; display: flex; gap: 7px; align-items: baseline; flex-wrap: wrap; }
+.dgl .p { color: var(--muted); }
+.dgl .ln { color: var(--aink); }
+.dgl .w { color: var(--faint); }
+.dgc {
+  margin: 5px 0 0; padding: 7px 10px;
+  background: var(--surface); border: 1px solid var(--soft); border-radius: 5px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.5;
+  overflow-x: auto; white-space: pre;
+}
+.dgc code { color: var(--ink); }
+/* The part complained about, marked in place rather than described below it —
+   a caret line under a horizontally scrolling block stops lining up the moment
+   it scrolls. */
+.dgc mark {
+  background: var(--fail-bg); color: var(--fail);
+  border-bottom: 1.5px solid var(--fail); border-radius: 2px;
+  padding: 0 1px;
+}
+.dgc .dgw { display: block; margin-top: 4px; color: var(--faint); font-size: 11px; white-space: normal; }
