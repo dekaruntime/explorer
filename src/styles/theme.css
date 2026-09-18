@@ -283,8 +283,25 @@ main { min-height: 72vh; }
   font-family: var(--mono); font-size: 11.5px; color: var(--muted);
   max-width: min(92vw, 520px);
 }
-.working > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.working .bar { width: 120px; flex: none; margin: 0; }
+.working .at { font-weight: 600; color: var(--ink); }
+
+/* One row per phase: what is being waited for, and how far along it is. */
+.phases { display: flex; flex-direction: column; gap: 5px; }
+.phase { display: flex; align-items: center; gap: 9px; line-height: 1.5; }
+.phase .lb { min-width: 108px; }
+.phase .dt { color: var(--faint); font-size: 10.5px; white-space: nowrap; }
+.phase.waiting { opacity: .42; }
+.phase .tick { color: var(--pass); flex: none; }
+.phase .bar { width: 110px; flex: none; margin: 0; height: 3px; }
+/* A parse is one call into the module: there is no progress to report, and a
+   bar that pretends otherwise is a lie told at 60fps. */
+.phase .bar.unknown { position: relative; overflow: hidden; }
+.phase .bar.unknown i { width: 40%; position: absolute; animation: slide 1.1s ease-in-out infinite; }
+@keyframes slide { 0% { left: -40%; } 100% { left: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .phase .bar.unknown i { animation: none; left: 0; width: 100%; opacity: .5; }
+}
+.empty .phases { max-width: 340px; margin: 16px auto; text-align: left; font-family: var(--mono); font-size: 11.5px; }
 @media (prefers-reduced-motion: no-preference) {
   .working { animation: rise .18s ease both; }
 }
