@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Dataset } from '../lib/types';
 import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
@@ -76,6 +76,17 @@ export function Explorer() {
   // written into the new repository's address — which then has no dataset.
   const [index, setIndex] = useState<{ of: string; timeline: RepoIndex } | null>(null);
   const [data, setData] = useState<Dataset | null>(null);
+  // Which commit the report on screen is of. Not the same as the commit being
+  // asked for: the address changes the moment it is clicked and the report
+  // arrives afterwards, and anything derived from the address while the old
+  // report is still up describes neither of them.
+  const [shownAt, setShownAt] = useState<string | null>(null);
+  // Changing repository is the one case where the report genuinely has to go:
+  // it is about something else. Letting the page collapse to fetch the next one
+  // pulls the colophon two thousand pixels up the screen and drops it back, so
+  // the space it occupied is held until there is something to put in it.
+  const main = useRef<HTMLElement>(null);
+  const [held, setHeld] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   // What the analysis running in this tab is doing, when one is.
   const [stage, setStage] = useState<Stage | null>(null);
@@ -145,8 +156,11 @@ export function Explorer() {
   useEffect(() => {
     if (!source) return;
     let live = true;
+    // Read before anything is cleared, while the previous report is still up.
+    setHeld(main.current?.offsetHeight ?? null);
     setIndex(null);
     setData(null);
+    setShownAt(null);
     setError(null);
     // Published first, because it is already analysed. A repository nobody has
     // exported still has commits, and they cost one request to list.
@@ -196,8 +210,13 @@ export function Explorer() {
         if (!live) return;
         if (found) {
           // The report on screen is the previous commit's. This is the moment
-          // it becomes another's, so it is the moment worth fading.
-          transition(() => setData(found));
+          // it becomes another's, so it is the moment worth fading — and the
+          // moment the two agree again.
+          transition(() => {
+            setData(found);
+            setShownAt(at);
+            setHeld(null);
+          });
           return;
         }
         // The store keeps every commit it has ever been given, so an address
@@ -232,8 +251,14 @@ export function Explorer() {
     window.history.replaceState(canonical, '', toPath(canonical));
   }, [view, at]);
 
-  /** Which slot on the rail is lit; -1 when looking at a commit off it. */
-  const commit = timeline.findIndex((c) => c.short === ref);
+  /**
+   * Which slot the rail lights, and which commit the report describes. They
+   * differ while one is arriving: the rail answers the click immediately,
+   * because a menu that does not respond for a second feels broken, and the
+   * report goes on describing itself truthfully until it is replaced.
+   */
+  const selected = timeline.findIndex((c) => c.short === ref);
+  const commit = timeline.findIndex((c) => c.short === shownAt);
 
   const packageName = view.pkg;
   const packageId =
@@ -335,7 +360,7 @@ export function Explorer() {
           <TimeMachine
             commits={timeline}
             slots={error ? 0 : TIME_MACHINE_SLOTS}
-            current={commit}
+            current={selected}
             // Only the commit. Stepping back while reading the functions of a
             // crate should show that crate's functions a commit earlier —
             // being returned to the score each time is what makes comparing
@@ -344,7 +369,7 @@ export function Explorer() {
           />
         </div>
 
-        <main>
+        <main ref={main} style={held && !data ? { minHeight: held } : undefined}>
           {error ? (
             <div className="empty">{error}</div>
           ) : !source ? (
@@ -369,7 +394,7 @@ export function Explorer() {
                 data={data}
                 timeline={timeline}
                 viewing={commit}
-                at={at}
+                at={shownAt}
                 scopeName={packageName}
                 files={files}
                 types={types}
