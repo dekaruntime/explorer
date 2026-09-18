@@ -12,7 +12,14 @@
 
 import { flushSync } from 'react-dom';
 
-type Starter = (callback: () => void) => { finished: Promise<void> };
+/** What the browser hands back. Each promise rejects if the transition is
+ *  interrupted, which is ordinary here — people click faster than 140ms. */
+type Transition = {
+  finished: Promise<void>;
+  ready: Promise<void>;
+  updateCallbackDone: Promise<void>;
+};
+type Starter = (callback: () => void) => Transition;
 
 export function transition(apply: () => void): void {
   const start = (document as Document & { startViewTransition?: Starter }).startViewTransition;
@@ -23,5 +30,11 @@ export function transition(apply: () => void): void {
     apply();
     return;
   }
-  start.call(document, () => flushSync(apply));
+  const running = start.call(document, () => flushSync(apply));
+  // Clicking again before the fade ends rejects these. That is the interruption
+  // working as intended, not a failure — but unhandled it reaches the page as
+  // an uncaught AbortError.
+  for (const settled of [running.finished, running.ready, running.updateCallbackDone]) {
+    settled?.catch(() => {});
+  }
 }
