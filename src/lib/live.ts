@@ -41,6 +41,14 @@ export interface Stage {
   total: number;
   /** Files that were already held, and so cost nothing. */
   cached: number;
+  /**
+   * What is happening when there is no count to give.
+   *
+   * Merging what the readers found, collecting what they wrote and scoring it
+   * are three steps with no files to count through, and a bar sitting full
+   * with nothing beside it looks stuck rather than busy.
+   */
+  note?: string;
 }
 
 /**
@@ -65,6 +73,60 @@ function hire(): Worker {
     name: 'cqx-analysis',
   });
 }
+
+/**
+ * The reader threads, made here because a worker cannot be sure it may make
+ * one: nested workers are not everywhere, and Safari had none until 16.4.
+ *
+ * Each gets a MessageChannel to the coordinator, so the ninety-six megabytes
+ * of facts makepad's readers write go straight there rather than through this
+ * thread. The page's only remaining job is to end them.
+ */
+function readers(count: number): { threads: Worker[]; ports: MessagePort[] } {
+  const threads: Worker[] = [];
+  const ports: MessagePort[] = [];
+  for (let i = 0; i < count; i++) {
+    const thread = new Worker(new URL('./read.worker.ts', import.meta.url), {
+      type: 'module',
+      name: `cqx-reader-${i}`,
+    });
+    const channel = new MessageChannel();
+    thread.postMessage({ port: channel.port2 }, [channel.port2]);
+    threads.push(thread);
+    ports.push(channel.port1);
+  }
+  return { threads, ports };
+}
+
+/**
+ * `?readers=n` on the page, when someone wants to insist.
+ *
+ * Left alone the number comes from the repository and the machine. Being able
+ * to say `1` is what makes the two paths comparable on the same commit.
+ *
+ * Read when this module loads and then kept, because the explorer rewrites the
+ * address as soon as it knows which commit it is showing — by the time an
+ * analysis starts, the query it was asked for is gone. Kept for the tab, so
+ * that walking the time machine goes on comparing like with like.
+ */
+const insisted = ((): number | undefined => {
+  const remember = (n: number) => {
+    try {
+      sessionStorage.setItem('cqx-readers', String(n));
+    } catch {
+      // Private windows: it holds for this page, which is usually enough.
+    }
+    return n;
+  };
+  try {
+    const asked = Number(new URLSearchParams(location.search).get('readers'));
+    if (Number.isFinite(asked) && asked >= 1 && asked <= 16) return remember(Math.floor(asked));
+    const held = Number(sessionStorage.getItem('cqx-readers'));
+    return Number.isFinite(held) && held >= 1 && held <= 16 ? held : undefined;
+  } catch {
+    return undefined;
+  }
+})();
 
 /**
  * The commits a repository offers, without analysing any of them.
@@ -108,9 +170,16 @@ export function liveDataset(
 ): Promise<Dataset> {
   return new Promise((resolve, reject) => {
     const w = hire();
+    // However many the coordinator turns out to ask for. Ending them is this
+    // thread's job: a reader that has parsed a quarter of makepad is holding
+    // several hundred megabytes that only termination gives back.
+    let helpers: Worker[] = [];
     const done = () => {
       w.removeEventListener('message', listen);
-      // Everything it held goes with it: the instance, its memory, the heap.
+      // Everything they held goes with them: the instances, their memory, the
+      // heaps.
+      for (const h of helpers) h.terminate();
+      helpers = [];
       w.terminate();
     };
     const listen = (event: MessageEvent<Reply>) => {
@@ -121,7 +190,14 @@ export function liveDataset(
           done: reply.done,
           total: reply.total,
           cached: reply.cached,
+          note: reply.note,
         });
+        return;
+      }
+      if (reply.type === 'want') {
+        const { threads, ports } = readers(reply.readers);
+        helpers = threads;
+        w.postMessage({ type: 'readers', ports }, ports);
         return;
       }
       done();
@@ -137,7 +213,13 @@ export function liveDataset(
       // The module has no clock, and the two halves of the wait are measured
       // separately: the analysis is the span the exporter also measures, and
       // the fetch is what this reader paid on top of it.
-      data.analysis = { ms: reply.ms, cqx: data.analysis?.cqx ?? '', fetch: reply.fetch };
+      data.analysis = {
+        ms: reply.ms,
+        cqx: data.analysis?.cqx ?? '',
+        fetch: reply.fetch,
+        readers: reply.readers,
+        held: reply.held,
+      };
       resolve(data);
     };
     // A thread that dies mid-analysis is a failure like any other, and saying
@@ -147,6 +229,11 @@ export function liveDataset(
       reject(new Error(event.message || 'the analysis stopped unexpectedly.'));
     });
     w.addEventListener('message', listen);
-    w.postMessage({ repo, sha, wasm: new URL('/cqx.wasm', location.href).href } satisfies Request);
+    w.postMessage({
+      repo,
+      sha,
+      wasm: new URL('/cqx.wasm', location.href).href,
+      readers: insisted,
+    } satisfies Request);
   });
 }

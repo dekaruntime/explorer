@@ -8,3 +8,6 @@ public/cqx.wasm
 # from its node_modules. They are not part of it.
 /*.mjs
 !astro.config.mjs
+
+# The same, for the shell.
+/*.sh

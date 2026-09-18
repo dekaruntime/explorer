@@ -155,6 +155,18 @@ export interface Analysis {
    * by whoever published it, and that is not this reader's wait.
    */
   fetch?: number;
+  /**
+   * How many threads read it. One for anything small enough that a second
+   * would cost more than it saved; more for a repository that needs dividing.
+   * Absent on a dataset from the store, which was read by a checkout.
+   */
+  readers?: number;
+  /**
+   * The most linear memory any one reader took, in bytes. The number that
+   * decides whether a repository can be read at all: wasm32 stops at four
+   * gigabytes and never gives any of it back.
+   */
+  held?: number;
 }
 
 export interface Dataset {
