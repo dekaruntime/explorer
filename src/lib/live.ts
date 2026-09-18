@@ -9,6 +9,10 @@
  * a snapshot assembled in memory instead of on disk. A commit analysed here and
  * the same commit analysed in CI produce the same bytes.
  *
+ * All of it happens in a worker. Parsing a large repository is seconds of solid
+ * CPU, and on the main thread that is a frozen tab — the progress bar stops at
+ * the moment it has the most to report.
+ *
  * What it costs, measured on a 330-file workspace: one API request for the
  * timeline, one for the tree, then the files from a CDN that neither meters nor
  * checks the origin. Roughly five seconds cold, and almost nothing for a second
@@ -16,8 +20,8 @@
  * what has not changed is already in the cache.
  */
 
-import { Analysis } from './cqx';
-import { fetchCommits, fetchSource, fetchTree, type Progress } from './github';
+import { fetchCommits } from './github';
+import type { Reply, Request } from './analyse.worker';
 import type { Commit, Dataset } from './types';
 import type { RepoIndex } from './store';
 
@@ -31,12 +35,13 @@ export interface Stage {
   total: number;
 }
 
-let module: Promise<Analysis> | null = null;
+let worker: Worker | null = null;
 
-/** One module per tab, compiled once however many repositories are looked at. */
-function analysis(): Promise<Analysis> {
-  module ??= Analysis.load('/cqx.wasm');
-  return module;
+/** One worker per tab, so the module is compiled once however many
+ * repositories are looked at. */
+function hired(): Worker {
+  worker ??= new Worker(new URL('./analyse.worker.ts', import.meta.url), { type: 'module' });
+  return worker;
 }
 
 /**
@@ -74,37 +79,35 @@ export async function liveIndex(repo: string): Promise<RepoIndex> {
   };
 }
 
-export async function liveDataset(
+export function liveDataset(
   repo: string,
-  ref: string,
+  sha: string,
   onStage?: (s: Stage) => void,
 ): Promise<Dataset> {
-  onStage?.({ note: 'reading the file list', done: 0, total: 0 });
-  const [cqx, tree] = await Promise.all([analysis(), fetchTree(repo, ref)]);
-  if (tree.files.length === 0) {
-    throw new Error(`${repo} has no Rust to analyse at ${ref.slice(0, 8)}.`);
-  }
-  if (tree.truncated) {
-    throw new Error(`${repo} is too large for GitHub to list in one request.`);
-  }
-
-  const report = (p: Progress) =>
-    onStage?.({
-      note: p.cached ? `fetching files · ${p.cached} already cached` : 'fetching files',
-      done: p.done,
-      total: p.total,
-    });
-  const files = await fetchSource(repo, tree, report);
-
-  onStage?.({ note: 'analysing', done: tree.files.length, total: tree.files.length });
-  cqx.reset(repo);
-  for (const file of files) cqx.addFile(file.path, file.content);
-
-  const { json, ms } = cqx.dataset(repo);
-  const data = JSON.parse(json) as Dataset & { error?: string };
-  if (data.error) throw new Error(data.error);
-  // The module has no clock; the timing belongs to the same span the exporter
-  // measures, so it is filled in from out here.
-  data.analysis = { ms, cqx: data.analysis?.cqx ?? '' };
-  return data;
+  return new Promise((resolve, reject) => {
+    const w = hired();
+    const listen = (event: MessageEvent<Reply>) => {
+      const reply = event.data;
+      if (reply.type === 'stage') {
+        onStage?.({ note: reply.note, done: reply.done, total: reply.total });
+        return;
+      }
+      w.removeEventListener('message', listen);
+      if (reply.type === 'error') {
+        reject(new Error(reply.message));
+        return;
+      }
+      const data = JSON.parse(reply.json) as Dataset & { error?: string };
+      if (data.error) {
+        reject(new Error(data.error));
+        return;
+      }
+      // The module has no clock; the timing belongs to the same span the
+      // exporter measures, so the worker reports it separately.
+      data.analysis = { ms: reply.ms, cqx: data.analysis?.cqx ?? '' };
+      resolve(data);
+    };
+    w.addEventListener('message', listen);
+    w.postMessage({ repo, sha, wasm: new URL('/cqx.wasm', location.href).href } satisfies Request);
+  });
 }
