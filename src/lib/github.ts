@@ -53,6 +53,39 @@ export interface Tree {
 const API = 'https://api.github.com';
 const RAW = 'https://raw.githubusercontent.com';
 
+/**
+ * Where the three metered calls go when something is there to answer them.
+ *
+ * A deployment with a worker holds a token and a bucket: it asks GitHub once
+ * per commit and keeps the answer, so the sixty requests an hour an address is
+ * allowed are not spent by reading. A deployment without one — a directory
+ * served from a laptop — has no such route, and the same calls go to GitHub
+ * directly, at sixty an hour.
+ *
+ * Decided once per page rather than per request, because the answer cannot
+ * change while the page is open.
+ */
+let proxied: Promise<boolean> | null = null;
+function viaWorker(): Promise<boolean> {
+  proxied ??= fetch('/gh/', { method: 'OPTIONS' })
+    .then((r) => r.ok)
+    .catch(() => false);
+  return proxied;
+}
+
+/** Asks the worker, and falls back to GitHub when there is no worker. */
+async function metered<T>(path: string, direct: string): Promise<T> {
+  if (await viaWorker()) {
+    const response = await fetch(`/gh/${path}`);
+    if (response.ok) return (await response.json()) as T;
+    // A worker that cannot answer says why; passing that on beats retrying
+    // against a limit this deployment was built to avoid.
+    const why = await response.json().catch(() => ({ error: `worker ${response.status}` }));
+    throw new Error((why as { error?: string }).error ?? `worker ${response.status}`);
+  }
+  return api<T>(`${API}${direct}`);
+}
+
 async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
   if (response.status === 403 || response.status === 429) {
@@ -153,16 +186,23 @@ export async function fetchCommits(repo: string, count: number): Promise<CommitR
     `https://cqx.invalid/commits/${repo}`,
     count,
     async () => {
-      const commits = await api<
-        { sha: string; commit: { message: string; author: { name: string; date: string } } }[]
-      >(`${API}/repos/${repo}/commits?per_page=${Math.max(count, 20)}`);
-      return commits.map((c) => ({
-        sha: c.sha,
-        short: c.sha.slice(0, 8),
-        subject: c.commit.message.split('\n')[0] ?? '',
-        author: c.commit.author.name,
-        date: c.commit.author.date,
-      }));
+      // The worker returns exactly these fields; GitHub returns thirty more
+      // per commit, which is why it is worth asking the worker.
+      const direct = `/repos/${repo}/commits?per_page=${Math.max(count, 20)}`;
+      const commits = await metered<
+        CommitRef[] | { sha: string; commit: { message: string; author: { name: string; date: string } } }[]
+      >(`${repo}/commits`, direct);
+      return commits.map((c) =>
+        'commit' in c
+          ? {
+              sha: c.sha,
+              short: c.sha.slice(0, 8),
+              subject: c.commit.message.split('\n')[0] ?? '',
+              author: c.commit.author.name,
+              date: c.commit.author.date,
+            }
+          : c,
+      );
     },
   );
 }
@@ -195,6 +235,20 @@ export async function fetchReleases(repo: string, count: number): Promise<Releas
     `https://cqx.invalid/releases/${repo}`,
     count,
     async () => {
+      // The worker resolves tags to commits itself, in one request, and hands
+      // back only what a rail shows. Without one, both requests happen here.
+      const viaProxy = await viaWorker();
+      if (viaProxy) {
+        const list = await metered<
+          { tag: string; sha: string | null; publishedAt: string | null; prerelease: boolean }[]
+        >(`${repo}/releases`, `/repos/${repo}/releases?per_page=${Math.max(count, 20)}`);
+        return list.map((r) => ({
+          tag: r.tag,
+          name: r.tag,
+          sha: r.sha,
+          publishedAt: r.publishedAt ?? '',
+        }));
+      }
       const releases = await api<
         {
           tag_name: string;
@@ -216,11 +270,10 @@ export async function fetchReleases(repo: string, count: number): Promise<Releas
           );
           byTag = new Map(tags.map((t) => [t.name, t.commit.sha]));
         } catch {
-          // The releases are still worth listing even if none of them resolve
-          // to a commit — the tab shows what it has rather than nothing.
+          // Without the tags, a release with a branch for a target cannot be
+          // resolved; it is listed and not offered.
         }
       }
-
       return visible.map((r) => ({
         tag: r.tag_name,
         name: r.name || r.tag_name,
@@ -233,9 +286,15 @@ export async function fetchReleases(repo: string, count: number): Promise<Releas
 
 /** Every file in a commit, with the id of its contents. One request. */
 export async function fetchTree(repo: string, ref: string): Promise<Tree> {
-  const tree = await api<{ sha: string; truncated: boolean; tree: TreeEntry[] }>(
-    `${API}/repos/${repo}/git/trees/${ref}?recursive=1`,
-  );
+  // The worker answers this one from the bucket for good once it has answered
+  // it once: a commit's files are what they were. It also answers it small —
+  // two fields per interesting file, where GitHub sends eight for every file
+  // there is. deno's tree is a quarter of a megabyte before that filter.
+  const tree = await metered<
+    | Tree
+    | { sha: string; truncated: boolean; tree: TreeEntry[] }
+  >(`${repo}/tree/${ref}`, `/repos/${repo}/git/trees/${ref}?recursive=1`);
+  if ('files' in tree) return tree;
   return {
     sha: tree.sha,
     truncated: tree.truncated,
