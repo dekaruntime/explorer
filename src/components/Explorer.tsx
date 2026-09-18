@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Dataset } from '../lib/types';
-import { loadCatalog, fileFor, type Catalog } from '../lib/catalog';
+import { loadCatalog, type Catalog } from '../lib/catalog';
+import { loadDataset, loadIndex, type RepoIndex } from '../lib/store';
 import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
 import { ElevationRail, type Elevation } from './ElevationRail';
 import { ThemePicker } from './ThemePicker';
@@ -28,6 +29,10 @@ const TIME_MACHINE_SLOTS = 5;
 
 export function Explorer() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
+  // The timeline and the commit are fetched separately on purpose: the timeline
+  // is one small file that changes, and a commit is a large one that never
+  // does. Moving through the time machine costs one immutable fetch.
+  const [index, setIndex] = useState<RepoIndex | null>(null);
   const [data, setData] = useState<Dataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   // One object rather than five pieces of state, because the URL describes all
@@ -75,45 +80,53 @@ export function Explorer() {
   }, []);
 
   useEffect(() => {
-    if (!catalog || !source) return;
-    // Named `report`, not `file`: this component already has a `file`, which is
-    // the file being looked at rather than the file being fetched.
-    const report = fileFor(catalog, source);
-    if (!report) {
-      setError(`No report for ${source} in this deployment.`);
-      return;
-    }
+    if (!source) return;
     let live = true;
+    setIndex(null);
     setData(null);
     setError(null);
-    fetch(`/data/${report}.json`)
-      .then(async (r) => {
-        // Anything unmatched is served the page, so a missing report arrives as
-        // 200 with HTML rather than as a 404. Reading it as JSON would fail with
-        // a parse error that says nothing about what went wrong.
-        const type = r.headers.get('content-type') ?? '';
-        if (!r.ok || !type.includes('json')) {
-          throw new Error(`No report at data/${report}.json`);
+    loadIndex(source)
+      .then((found) => {
+        if (!live) return;
+        if (!found) {
+          throw new Error(`Nothing exported for ${source} yet.`);
         }
-        return (await r.json()) as Dataset;
+        setIndex(found);
       })
-      .then((d) => { if (live) setData(d); })
       .catch((e: Error) => { if (live) setError(e.message); });
     return () => { live = false; };
-  }, [catalog, source]);
+  }, [source]);
 
   // Newest first: the first entry is head, each one after it a commit further back.
-  const timeline = useMemo(() => (data ? [...data.history].reverse() : []), [data]);
+  const timeline = useMemo(() => (index ? [...index.commits].reverse() : []), [index]);
+  const at = view.ref ?? timeline[0]?.short ?? null;
+
+  useEffect(() => {
+    if (!source || !at) return;
+    let live = true;
+    setData(null);
+    loadDataset(source, at)
+      .then((found) => {
+        if (!live) return;
+        if (!found) {
+          throw new Error(`No dataset for ${source} at ${at}.`);
+        }
+        setData(found);
+      })
+      .catch((e: Error) => { if (live) setError(e.message); });
+    return () => { live = false; };
+  }, [source, at]);
+
   const commit = Math.max(0, timeline.findIndex((c) => c.short === ref));
 
   useEffect(() => {
     // An address without a commit is not a stable address, so once the head is
     // known the URL is completed in place rather than by adding an entry.
-    if (!data || view.ref || timeline.length === 0) return;
+    if (view.ref || timeline.length === 0) return;
     const canonical = { ...view, ref: timeline[0]!.short };
     setView(canonical);
     window.history.replaceState(canonical, '', toPath(canonical));
-  }, [data, view, timeline]);
+  }, [view, timeline]);
 
   const packageName = view.pkg;
   const packageId =
@@ -171,12 +184,12 @@ export function Explorer() {
         <div className="wrap hdr">
           <span className="brand">c<b>q</b>x</span>
           <span className="repo">
-            {data?.commits_url ? (
-              <a className="tmlink" href={data.commits_url} target="_blank" rel="noopener">
-                {data.repo} ↗
+            {index?.commits_url ? (
+              <a className="tmlink" href={index.commits_url} target="_blank" rel="noopener">
+                {index.repo} ↗
               </a>
             ) : (
-              data?.repo ?? 'loading…'
+              index?.repo ?? source ?? 'loading…'
             )}
           </span>
           {/* One report needs no picker; several do. */}
@@ -220,7 +233,7 @@ export function Explorer() {
 
         <main>
           {!data ? (
-            <div className="empty">Loading {source}…</div>
+            <div className="empty">Loading {source}{at ? ` at ${at}` : ''}…</div>
           ) : (
             <>
           {level !== 'L0' && level !== 'L1' && level !== 'L2' ? scopeBar : null}
