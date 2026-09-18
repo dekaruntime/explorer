@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Dataset } from '../lib/types';
 import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
 import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
+import { liveDataset, liveIndex, type Stage } from '../lib/live';
 import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
 import { ElevationRail, type Elevation } from './ElevationRail';
 import { RepoInput } from './RepoInput';
@@ -79,6 +80,8 @@ export function Explorer() {
   const [index, setIndex] = useState<{ of: string; timeline: RepoIndex } | null>(null);
   const [data, setData] = useState<Dataset | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // What the analysis running in this tab is doing, when one is.
+  const [stage, setStage] = useState<Stage | null>(null);
   // One object rather than five pieces of state, because the URL describes all
   // of it at once and they have to stay in step.
   const [view, setView] = useState<View>(() => defaultView(''));
@@ -132,17 +135,11 @@ export function Explorer() {
     setIndex(null);
     setData(null);
     setError(null);
+    // Published first, because it is already analysed. A repository nobody has
+    // exported still has commits, and they cost one request to list.
     loadIndex(source)
-      .then((found) => {
-        if (!live) return;
-        if (!found) {
-          throw new Error(
-            `Nothing has been exported for ${source}. ` +
-              `Run \`cqx export\` against it, or open one this deployment lists.`,
-          );
-        }
-        setIndex({ of: source, timeline: found });
-      })
+      .then((found) => found ?? liveIndex(source))
+      .then((found) => { if (live) setIndex({ of: source, timeline: found }); })
       .catch((e: Error) => { if (live) setError(e.message); });
     return () => { live = false; };
   }, [source]);
@@ -163,7 +160,21 @@ export function Explorer() {
     if (!source || !at) return;
     let live = true;
     setData(null);
+    setStage(null);
     loadDataset(source, at)
+      .then(async (found) => {
+        if (!live) return found;
+        if (found) return found;
+        // Nothing published for this commit. It may be off the rail, or the
+        // repository may simply never have been exported — either way the
+        // source is still there to read.
+        const sha = timeline.find((c) => c.short === at)?.sha ?? at;
+        try {
+          return await liveDataset(source, sha, (s) => { if (live) setStage(s); });
+        } finally {
+          if (live) setStage(null);
+        }
+      })
       .then((found) => {
         if (!live) return;
         if (found) {
@@ -318,6 +329,21 @@ export function Explorer() {
             <div className="empty">
               Nothing to open. This deployment lists no repository, so name one
               in the address — <code>/{'{owner}'}/{'{repo}'}</code>.
+            </div>
+          ) : stage ? (
+            <div className="empty">
+              <div>
+                Analysing <b>{source}</b>
+                {at ? <> at <b>{at}</b></> : null} — {stage.note}
+                {stage.total ? ` · ${stage.done} of ${stage.total}` : ''}
+              </div>
+              <div className="bar">
+                <i style={{ width: `${stage.total ? (stage.done / stage.total) * 100 : 8}%` }} />
+              </div>
+              <div className="dim">
+                Nobody has published this one, so it is being read from GitHub and
+                analysed here.
+              </div>
             </div>
           ) : !data ? (
             <div className="empty">Loading {source}{at ? ` at ${at}` : ''}…</div>
