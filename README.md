@@ -50,3 +50,23 @@ npm run build
 ## Licence
 
 Apache-2.0.
+
+## Deploying
+
+Cloudflare Pages builds this on a push to `main`, the same way
+`samifouad/website` is set up — the git integration, not a workflow, so there is
+no deploy token in this repository.
+
+Pages project settings:
+
+| | |
+|---|---|
+| build command | `npm run build` |
+| output directory | `dist` |
+| node version | 22 |
+
+`public/_headers` handles caching: assets carry a content hash and are immutable,
+a dataset keeps its name when re-analysed so it is revalidated.
+
+CI here typechecks and builds every pull request. Pages builds `main` regardless,
+so the point is to catch a break before it has already deployed.
