@@ -439,7 +439,14 @@ export function Explorer() {
                   ? [
                       data.analysis.fetch ? `${seconds(data.analysis.fetch)}s fetching` : null,
                       typeof data.analysis.ms === 'number'
-                        ? `${seconds(data.analysis.ms)}s analysing`
+                        ? `${seconds(data.analysis.ms)}s analysing${
+                            (data.analysis.readers ?? 1) > 1
+                              ? ` across ${data.analysis.readers} threads`
+                              : ''
+                          }`
+                        : null,
+                      data.analysis.held
+                        ? `${Math.round(data.analysis.held / 1e6).toLocaleString()} MB per reader`
                         : null,
                       data.analysis.cqx ? `cqx ${data.analysis.cqx}` : null,
                     ]
