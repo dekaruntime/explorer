@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && node scripts/relative-urls.mjs",
+    "build": "astro build",
     "preview": "npm run build && wrangler dev",
     "check": "astro check && tsc --noEmit",
     "deploy": "npm run build && wrangler deploy"
