@@ -94,6 +94,17 @@ export function Explorer() {
         const next = { ...current, ...patch };
         if (sameView(current, next)) return current;
         window.history.pushState(next, '', toPath(next));
+        // A different elevation or a different scope is a different view, and
+        // it starts at its beginning. Landing partway down it — or wherever
+        // the browser clamps a scroll when the new view is shorter — loses the
+        // reader's place without giving them another one.
+        //
+        // A commit is not a different view. It is the same one a moment
+        // earlier, which is the whole point of stepping through them, so the
+        // page stays exactly where it is.
+        const moved =
+          next.level !== current.level || next.pkg !== current.pkg || next.file !== current.file;
+        if (moved) window.scrollTo({ top: 0 });
         return next;
       }),
     );
@@ -325,7 +336,11 @@ export function Explorer() {
             commits={timeline}
             slots={error ? 0 : TIME_MACHINE_SLOTS}
             current={commit}
-            onSelect={(i) => go({ ref: timeline[i]?.short ?? null, level: 'L0' })}
+            // Only the commit. Stepping back while reading the functions of a
+            // crate should show that crate's functions a commit earlier —
+            // being returned to the score each time is what makes comparing
+            // two commits impossible.
+            onSelect={(i) => go({ ref: timeline[i]?.short ?? null })}
           />
         </div>
 
