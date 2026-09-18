@@ -45,8 +45,11 @@ function Phase({
       {state === 'done' ? (
         <Tick />
       ) : (
-        <div className={`bar${fraction === undefined ? ' unknown' : ''}`}>
-          <i style={fraction === undefined ? undefined : { width: `${fraction * 100}%` }} />
+        // A phase that has not started has nothing to report and should not
+        // look as though it is reporting it: only a running phase of unknown
+        // length gets the moving bar.
+        <div className={`bar${fraction === undefined && state === 'running' ? ' unknown' : ''}`}>
+          <i style={fraction === undefined ? { width: 0 } : { width: `${fraction * 100}%` }} />
         </div>
       )}
       {detail ? <span className="dt">{detail}</span> : null}
@@ -80,19 +83,9 @@ export function Phases({ stage }: { stage: Stage }) {
 /** The first commit of a repository nobody has published: nothing to keep. */
 export function Analysing({ repo, at, stage }: { repo: string; at: string | null; stage: Stage }) {
   return (
-    <div className="empty">
-      <div>
-        Analysing <b>{repo}</b>
-        {at ? (
-          <>
-            {' '}at <b>{at}</b>
-          </>
-        ) : null}
-      </div>
+    <div className="empty waiting-room">
+      <div className="ttl">One moment while we generate a report</div>
       <Phases stage={stage} />
-      <div className="dim">
-        Nobody has published this one, so it is being read from GitHub and analysed here.
-      </div>
     </div>
   );
 }
