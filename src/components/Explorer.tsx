@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Dataset } from '../lib/types';
+import type { Commit, Dataset } from '../lib/types';
 import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
 import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
 import { liveDataset, liveIndex, type Stage } from '../lib/live';
+import { fetchCommits } from '../lib/github';
 import { fetchReleases, type ReleaseRef } from '../lib/github';
 import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
 import { transition } from '../lib/transition';
@@ -84,7 +85,12 @@ export function Explorer() {
   // means "asked for, not answered yet", which is what lets the tab default
   // to commits only once the answer is known to be "none" rather than on
   // every render before it arrives.
-  const [releases, setReleases] = useState<{ of: string; list: ReleaseRef[] } | null>(null);
+  const [releases, setReleases] = useState<{
+    of: string;
+    list: ReleaseRef[];
+    /** Why the list is empty, when it is empty for a reason. */
+    trouble?: string;
+  } | null>(null);
   // Null until the reader picks one. Until then the effective tab follows the
   // data: releases, unless the repository turns out to have none.
   const [tab, setTab] = useState<TimeMachineTab | null>(null);
@@ -103,6 +109,8 @@ export function Explorer() {
   const [error, setError] = useState<string | null>(null);
   // What the analysis running in this tab is doing, when one is.
   const [stage, setStage] = useState<Stage | null>(null);
+  /** Why the rail is empty, when the report beside it is not. */
+  const [timelineTrouble, setTimelineTrouble] = useState<string | null>(null);
   // One object rather than five pieces of state, because the URL describes all
   // of it at once and they have to stay in step.
   const [view, setView] = useState<View>(() => defaultView(''));
@@ -175,6 +183,7 @@ export function Explorer() {
     setData(null);
     setShownAt(null);
     setError(null);
+    setTimelineTrouble(null);
     setReleases(null);
     setTab(null);
     // Published first, because it is already analysed. A repository nobody has
@@ -182,23 +191,65 @@ export function Explorer() {
     loadIndex(source)
       .then((found) => found ?? liveIndex(source))
       .then((found) => { if (live) setIndex({ of: source, timeline: found }); })
-      .catch((e: Error) => { if (live) setError(e.message); });
+      .catch((e: Error) => {
+        if (!live) return;
+        // An address that names a commit does not need the timeline to show
+        // that commit: the dataset may well be held already, and the rail is
+        // the only part that cannot be drawn. Losing the whole report because
+        // the list of its neighbours was refused helps nobody.
+        if (view.ref) setTimelineTrouble(e.message);
+        else setError(e.message);
+      });
     // Independent of the timeline above: a published repository's store has no
     // idea what its tags are, and an unpublished one is worth listing releases
     // for before anything has been analysed. A repository with no releases —
     // most of them — answers with an empty list, not an error.
     fetchReleases(source, RELEASE_SLOTS)
       .then((list) => { if (live) setReleases({ of: source, list }); })
-      .catch(() => { if (live) setReleases({ of: source, list: [] }); });
+      // A refused request is not an absence of releases, and saying so would
+      // be telling the reader something untrue about their repository.
+      .catch((e: Error) => {
+        if (live) setReleases({ of: source, list: [], trouble: e.message });
+      });
     return () => { live = false; };
   }, [source]);
 
   // Newest first: the first entry is head, each one after it a commit further back.
   const repoIndex = index?.of === source ? index.timeline : null;
-  const timeline = useMemo(
+  const published = useMemo(
     () => (repoIndex ? [...repoIndex.commits].reverse() : []),
     [repoIndex],
   );
+  // A published repository's index carries the five commits its CI exported,
+  // and the rail asks for twenty. Filling the difference with empty slots said
+  // fifteen commits were still arriving when nothing was: they had simply
+  // never been published. The rest of the list is asked for separately — one
+  // request, cached — and the store still answers for the five it holds, so
+  // those open instantly and the others are read here.
+  const [extra, setExtra] = useState<{ of: string; commits: Commit[] } | null>(null);
+  useEffect(() => {
+    if (!source || published.length === 0 || published.length >= TIME_MACHINE_SLOTS) return;
+    let live = true;
+    fetchCommits(source, TIME_MACHINE_SLOTS)
+      .then((found) => {
+        if (!live) return;
+        setExtra({
+          of: source,
+          commits: found.map((c) => ({ ...c, lines: 0, scores: {}, delta: {} })),
+        });
+      })
+      // The rail is worth having with five entries; a refused request is not
+      // worth an error over.
+      .catch(() => {});
+    return () => { live = false; };
+  }, [source, published.length]);
+
+  const timeline = useMemo(() => {
+    if (extra?.of !== source) return published;
+    // What is published wins where it exists: it carries the scores.
+    const known = new Map(published.map((c) => [c.short, c]));
+    return extra.commits.map((c) => known.get(c.short) ?? c);
+  }, [published, extra, source]);
   // An address that names a commit is honoured even when the timeline does not
   // list it: the store keeps every commit it has ever been given, and only the
   // five most recent are on the rail. Whether it exists is the fetch's answer,
@@ -286,6 +337,7 @@ export function Explorer() {
   // the guard keeps the previous repository's list from flashing under the
   // new one's tabs for a frame.
   const releaseList = releases?.of === source ? releases.list : null;
+  const releaseTrouble = releases?.of === source ? releases.trouble : undefined;
   // Null (still asked for) reads as the default, releases. Only once the
   // answer is known to be empty does the fallback to commits apply — and only
   // until the reader picks a tab themselves, which is remembered from there.
@@ -414,7 +466,11 @@ export function Explorer() {
           <TimeMachine
             commits={timeline}
             releases={error ? [] : releaseList}
-            slots={error ? 0 : TIME_MACHINE_SLOTS}
+            releasesTrouble={releaseTrouble}
+            trouble={timelineTrouble}
+            // Only as many as there are. An empty slot means "still arriving",
+            // and nothing is arriving for a commit nobody has heard of.
+            slots={error ? 0 : Math.min(TIME_MACHINE_SLOTS, Math.max(timeline.length, 1))}
             active={ref}
             tab={effectiveTab}
             onTabChange={setTab}
