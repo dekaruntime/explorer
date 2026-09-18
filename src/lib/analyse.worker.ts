@@ -30,8 +30,8 @@ export interface Request {
 }
 
 export type Reply =
-  | { type: 'stage'; note: string; done: number; total: number }
-  | { type: 'done'; json: string; ms: number }
+  | { type: 'stage'; phase: 'listing' | 'fetching' | 'analysing'; done: number; total: number; cached: number }
+  | { type: 'done'; json: string; ms: number; fetch: number }
   | { type: 'error'; message: string };
 
 let module: Promise<Analysis> | null = null;
@@ -48,19 +48,19 @@ async function remembered(repo: string, sha: string): Promise<Reply | null> {
   try {
     const hit = await (await caches.open(DATASETS)).match(key(repo, sha));
     if (!hit) return null;
-    const { json, ms } = (await hit.json()) as { json: string; ms: number };
-    return { type: 'done', json, ms };
+    const { json, ms, fetch } = (await hit.json()) as { json: string; ms: number; fetch: number };
+    return { type: 'done', json, ms, fetch: fetch ?? 0 };
   } catch {
     // Private windows, blocked storage, a cache that misbehaves: analyse it.
     return null;
   }
 }
 
-async function remember(repo: string, sha: string, json: string, ms: number) {
+async function remember(repo: string, sha: string, json: string, ms: number, fetch: number) {
   try {
     await (await caches.open(DATASETS)).put(
       key(repo, sha),
-      new Response(JSON.stringify({ json, ms }), {
+      new Response(JSON.stringify({ json, ms, fetch }), {
         headers: { 'content-type': 'application/json' },
       }),
     );
@@ -79,7 +79,8 @@ self.onmessage = async (event: MessageEvent<Request>) => {
       return;
     }
 
-    post({ type: 'stage', note: 'reading the file list', done: 0, total: 0 });
+    const began = performance.now();
+    post({ type: 'stage', phase: 'listing', done: 0, total: 0, cached: 0 });
     module ??= Analysis.load(wasm);
     const [cqx, tree] = await Promise.all([module, fetchTree(repo, sha)]);
 
@@ -91,22 +92,19 @@ self.onmessage = async (event: MessageEvent<Request>) => {
     }
 
     const files = await fetchSource(repo, tree, (p) =>
-      post({
-        type: 'stage',
-        note: p.cached ? `reading files · ${p.cached} already cached` : 'reading files',
-        done: p.done,
-        total: p.total,
-      }),
+      post({ type: 'stage', phase: 'fetching', done: p.done, total: p.total, cached: p.cached }),
     );
+    // Everything up to here is network and cache. What follows is this machine.
+    const fetched = Math.round(performance.now() - began);
 
-    post({ type: 'stage', note: 'analysing', done: files.length, total: files.length });
+    post({ type: 'stage', phase: 'analysing', done: files.length, total: files.length, cached: 0 });
     cqx.reset(repo);
     for (const file of files) cqx.addFile(file.path, file.content);
 
     const { json, ms } = cqx.dataset(repo);
     // Kept before it is sent, so a second click cannot race the first.
-    await remember(repo, sha, json, ms);
-    post({ type: 'done', json, ms });
+    await remember(repo, sha, json, ms, fetched);
+    post({ type: 'done', json, ms, fetch: fetched });
   } catch (e) {
     post({ type: 'error', message: e instanceof Error ? e.message : String(e) });
   }

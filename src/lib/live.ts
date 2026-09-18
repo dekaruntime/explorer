@@ -28,11 +28,19 @@ import type { RepoIndex } from './store';
 /** How many commits the rail offers for a repository being analysed here. */
 export const LIVE_COMMITS = 5;
 
+/**
+ * Which half of the wait this is.
+ *
+ * They are not the same work and they do not take the same time — deno spends
+ * thirteen seconds reading files and seven parsing them — so reporting one
+ * number for both tells a reader they waited half as long as they did.
+ */
 export interface Stage {
-  /** What is happening, for someone watching a progress line. */
-  note: string;
+  phase: 'listing' | 'fetching' | 'analysing';
   done: number;
   total: number;
+  /** Files that were already held, and so cost nothing. */
+  cached: number;
 }
 
 let worker: Worker | null = null;
@@ -95,7 +103,12 @@ export function liveDataset(
     const listen = (event: MessageEvent<Reply>) => {
       const reply = event.data;
       if (reply.type === 'stage') {
-        onStage?.({ note: reply.note, done: reply.done, total: reply.total });
+        onStage?.({
+          phase: reply.phase,
+          done: reply.done,
+          total: reply.total,
+          cached: reply.cached,
+        });
         return;
       }
       w.removeEventListener('message', listen);
@@ -108,9 +121,10 @@ export function liveDataset(
         reject(new Error(data.error));
         return;
       }
-      // The module has no clock; the timing belongs to the same span the
-      // exporter measures, so the worker reports it separately.
-      data.analysis = { ms: reply.ms, cqx: data.analysis?.cqx ?? '' };
+      // The module has no clock, and the two halves of the wait are measured
+      // separately: the analysis is the span the exporter also measures, and
+      // the fetch is what this reader paid on top of it.
+      data.analysis = { ms: reply.ms, cqx: data.analysis?.cqx ?? '', fetch: reply.fetch };
       resolve(data);
     };
     w.addEventListener('message', listen);

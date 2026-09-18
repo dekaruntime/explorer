@@ -9,34 +9,83 @@ import type { Stage } from '../lib/live';
  * the report stays, and the notice sits above it.
  */
 
-export function Bar({ stage }: { stage: Stage }) {
+/** Done, and the tick that says so. */
+function Tick() {
   return (
-    <div className="bar">
-      <i style={{ width: `${stage.total ? (stage.done / stage.total) * 100 : 8}%` }} />
+    <svg className="tick" viewBox="0 0 16 16" aria-hidden="true" width="13" height="13">
+      <path d="M2 8.5l4 4 8-9" fill="none" stroke="currentColor" strokeWidth="2.2"
+        strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * One row per phase.
+ *
+ * Reading the files and parsing them are different work taking different time
+ * — deno spends thirteen seconds on the first and seven on the second — and a
+ * single bar covering both says the wait is half what it is. The parse has no
+ * progress to report, because it is one call into the module, so its bar says
+ * that rather than inventing a number.
+ */
+function Phase({
+  label,
+  state,
+  fraction,
+  detail,
+}: {
+  label: string;
+  state: 'waiting' | 'running' | 'done';
+  fraction?: number;
+  detail?: string;
+}) {
+  return (
+    <div className={`phase ${state}`}>
+      <span className="lb">{label}</span>
+      {state === 'done' ? (
+        <Tick />
+      ) : (
+        // A phase that has not started has nothing to report and should not
+        // look as though it is reporting it: only a running phase of unknown
+        // length gets the moving bar.
+        <div className={`bar${fraction === undefined && state === 'running' ? ' unknown' : ''}`}>
+          <i style={fraction === undefined ? { width: 0 } : { width: `${fraction * 100}%` }} />
+        </div>
+      )}
+      {detail ? <span className="dt">{detail}</span> : null}
     </div>
   );
 }
 
-const detail = (stage: Stage) =>
-  `${stage.note}${stage.total ? ` · ${stage.done} of ${stage.total}` : ''}`;
+export function Phases({ stage }: { stage: Stage }) {
+  const fetched = stage.phase === 'analysing';
+  const reading: 'waiting' | 'running' | 'done' =
+    stage.phase === 'listing' ? 'running' : fetched ? 'done' : 'running';
+  return (
+    <div className="phases">
+      <Phase
+        label="fetching files"
+        state={reading}
+        fraction={stage.phase === 'fetching' && stage.total ? stage.done / stage.total : undefined}
+        detail={
+          stage.phase === 'fetching'
+            ? `${stage.done} of ${stage.total}${stage.cached ? ` · ${stage.cached} cached` : ''}`
+            : stage.phase === 'listing'
+              ? 'reading the file list'
+              : `${stage.total} files`
+        }
+      />
+      <Phase label="running analysis" state={fetched ? 'running' : 'waiting'} />
+    </div>
+  );
+}
 
 /** The first commit of a repository nobody has published: nothing to keep. */
 export function Analysing({ repo, at, stage }: { repo: string; at: string | null; stage: Stage }) {
   return (
-    <div className="empty">
-      <div>
-        Analysing <b>{repo}</b>
-        {at ? (
-          <>
-            {' '}at <b>{at}</b>
-          </>
-        ) : null}{' '}
-        — {detail(stage)}
-      </div>
-      <Bar stage={stage} />
-      <div className="dim">
-        Nobody has published this one, so it is being read from GitHub and analysed here.
-      </div>
+    <div className="empty waiting-room">
+      <div className="ttl">One moment while we generate a report</div>
+      <Phases stage={stage} />
     </div>
   );
 }
@@ -45,11 +94,8 @@ export function Analysing({ repo, at, stage }: { repo: string; at: string | null
 export function Working({ at, stage }: { at: string | null; stage: Stage }) {
   return (
     <div className="working" role="status" aria-live="polite">
-      <Bar stage={stage} />
-      <span>
-        {at ? `${at} — ` : ''}
-        {detail(stage)}
-      </span>
+      {at ? <span className="at">{at}</span> : null}
+      <Phases stage={stage} />
     </div>
   );
 }
