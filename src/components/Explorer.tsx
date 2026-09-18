@@ -32,7 +32,11 @@ export function Explorer() {
   // The timeline and the commit are fetched separately on purpose: the timeline
   // is one small file that changes, and a commit is a large one that never
   // does. Moving through the time machine costs one immutable fetch.
-  const [index, setIndex] = useState<RepoIndex | null>(null);
+  //
+  // Held with the repository it describes. Without that, changing repository
+  // leaves the old timeline standing for a render, and the head it names gets
+  // written into the new repository's address — which then has no dataset.
+  const [index, setIndex] = useState<{ of: string; timeline: RepoIndex } | null>(null);
   const [data, setData] = useState<Dataset | null>(null);
   const [error, setError] = useState<string | null>(null);
   // One object rather than five pieces of state, because the URL describes all
@@ -97,14 +101,22 @@ export function Explorer() {
               `Run \`cqx export\` against it, or open one this deployment lists.`,
           );
         }
-        setIndex(found);
+        setIndex({ of: source, timeline: found });
       })
       .catch((e: Error) => { if (live) setError(e.message); });
     return () => { live = false; };
   }, [source]);
 
   // Newest first: the first entry is head, each one after it a commit further back.
-  const timeline = useMemo(() => (index ? [...index.commits].reverse() : []), [index]);
+  const repoIndex = index?.of === source ? index.timeline : null;
+  const timeline = useMemo(
+    () => (repoIndex ? [...repoIndex.commits].reverse() : []),
+    [repoIndex],
+  );
+  // An address that names a commit is honoured even when the timeline does not
+  // list it: the store keeps every commit it has ever been given, and only the
+  // five most recent are on the rail. Whether it exists is the fetch's answer,
+  // not a guess made here.
   const at = view.ref ?? timeline[0]?.short ?? null;
 
   useEffect(() => {
@@ -114,28 +126,44 @@ export function Explorer() {
     loadDataset(source, at)
       .then((found) => {
         if (!live) return;
-        if (!found) {
-          throw new Error(
-            `${source} has a timeline, but no dataset at ${at}. ` +
-              `That commit is outside what has been exported.`,
-          );
+        if (found) {
+          setData(found);
+          return;
         }
-        setData(found);
+        // The store keeps every commit it has ever been given, so an address
+        // off the rail is usually still there. When it is not — a commit from
+        // another repository, a typo, something never exported — the
+        // repository itself is still meaningful, so this drops to its head
+        // rather than dead-ending. In place, so the bad address does not
+        // become somewhere the back button returns to.
+        const head = timeline[0]?.short;
+        if (head && head !== at) {
+          setView((current) => {
+            const canonical = { ...current, ref: head };
+            window.history.replaceState(canonical, '', toPath(canonical));
+            return canonical;
+          });
+          return;
+        }
+        throw new Error(
+          `${source} has a timeline, but nothing has been exported at ${at}.`,
+        );
       })
       .catch((e: Error) => { if (live) setError(e.message); });
     return () => { live = false; };
-  }, [source, at]);
-
-  const commit = Math.max(0, timeline.findIndex((c) => c.short === ref));
+  }, [source, at, timeline]);
 
   useEffect(() => {
     // An address without a commit is not a stable address, so once the head is
     // known the URL is completed in place rather than by adding an entry.
-    if (view.ref || timeline.length === 0) return;
-    const canonical = { ...view, ref: timeline[0]!.short };
+    if (!at || view.ref === at) return;
+    const canonical = { ...view, ref: at };
     setView(canonical);
     window.history.replaceState(canonical, '', toPath(canonical));
-  }, [view, timeline]);
+  }, [view, at]);
+
+  /** Which slot on the rail is lit; -1 when looking at a commit off it. */
+  const commit = timeline.findIndex((c) => c.short === ref);
 
   const packageName = view.pkg;
   const packageId =
@@ -185,12 +213,12 @@ export function Explorer() {
         <div className="wrap hdr">
           <span className="brand">c<b>q</b>x</span>
           <span className="repo">
-            {index?.commits_url ? (
-              <a className="tmlink" href={index.commits_url} target="_blank" rel="noopener">
-                {index.repo} ↗
+            {repoIndex?.commits_url ? (
+              <a className="tmlink" href={repoIndex.commits_url} target="_blank" rel="noopener">
+                {repoIndex.repo} ↗
               </a>
             ) : (
-              index?.repo ?? source ?? 'loading…'
+              repoIndex?.repo ?? source ?? 'loading…'
             )}
           </span>
           {/* One report needs no picker; several do. */}
@@ -251,6 +279,7 @@ export function Explorer() {
               score={data.score}
               commits={timeline}
               viewing={commit}
+              at={at}
               onBackToHead={() => go({ ref: timeline[0]?.short ?? null })}
               onJump={(l) => go({ level: l as LevelId })}
             />
