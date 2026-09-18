@@ -1,4 +1,4 @@
-import type { LevelId } from './Explorer';
+import type { LevelId } from '../lib/view';
 
 export interface Elevation {
   id: LevelId;
