@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { Dataset } from '../lib/types';
+import { defaultView, readView, sameView, toQuery, type LevelId, type View } from '../lib/view';
 import { ElevationRail, type Elevation } from './ElevationRail';
 import { ThemePicker } from './ThemePicker';
 import { TimeMachine } from './TimeMachine';
@@ -10,8 +11,6 @@ import { PackagesLevel } from './levels/Packages';
 import { FilesLevel } from './levels/Files';
 import { TypesLevel } from './levels/Types';
 import { FunctionsLevel } from './levels/Functions';
-
-export type LevelId = 'L0' | 'L1' | 'L2' | 'L3' | 'L4' | 'L5';
 
 const TIME_MACHINE_SLOTS = 5;
 
@@ -28,14 +27,38 @@ const PREBAKED = [
   { id: 'dsc', label: 'dekaruntime/dsc' },
 ] as const;
 
+const DEFAULT_REPO = PREBAKED[0].id;
+
 export function Explorer() {
   const [data, setData] = useState<Dataset | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<string>(PREBAKED[0].id);
-  const [level, setLevel] = useState<LevelId>('L0');
-  const [pkg, setPkg] = useState<string | null>(null);
-  const [file, setFile] = useState<string | null>(null);
-  const [commit, setCommit] = useState(0);
+  // One object rather than five pieces of state, because the URL describes all
+  // of it at once and they have to stay in step.
+  const [view, setView] = useState<View>(() => defaultView(DEFAULT_REPO));
+  const { repo: source, level, pkg, file, commit } = view;
+
+  /** Changes the view and records it, so back returns here. */
+  const go = (patch: Partial<View>) => {
+    setView((current) => {
+      const next = { ...current, ...patch };
+      if (sameView(current, next)) return current;
+      window.history.pushState(next, '', toQuery(next, DEFAULT_REPO));
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    // The first render has to match the server's, so the URL is read after
+    // mounting rather than during it, and replaces the entry instead of adding
+    // one — arriving on a link should not need two backs to leave.
+    const fromUrl = readView(DEFAULT_REPO);
+    setView(fromUrl);
+    window.history.replaceState(fromUrl, '', toQuery(fromUrl, DEFAULT_REPO));
+
+    const onPop = () => setView(readView(DEFAULT_REPO));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -88,7 +111,7 @@ export function Explorer() {
       <div className="scope">
         scope: {pkg ? <b>{packageName(pkg)}</b> : null}
         {file ? <> / <b>{filePath}</b></> : null}
-        <button onClick={() => { setPkg(null); setFile(null); }}>clear</button>
+        <button onClick={() => go({ pkg: null, file: null })}>clear</button>
       </div>
     ) : null;
 
@@ -116,7 +139,12 @@ export function Explorer() {
           </span>
           <label className="picker">
             <span className="dim">repo</span>
-            <select value={source} onChange={(e) => { setSource(e.target.value); setPkg(null); setFile(null); setCommit(0); setLevel('L0'); }}>
+            <select
+              value={source}
+              onChange={(e) =>
+                go({ repo: e.target.value, pkg: null, file: null, commit: 0, level: 'L0' })
+              }
+            >
               {PREBAKED.map((p) => (
                 <option key={p.id} value={p.id}>{p.label}</option>
               ))}
@@ -136,12 +164,12 @@ export function Explorer() {
 
       <div className="wrap shell">
         <div className="sidebar">
-          <ElevationRail levels={levels} current={level} onSelect={setLevel} />
+          <ElevationRail levels={levels} current={level} onSelect={(id) => go({ level: id })} />
           <TimeMachine
             commits={timeline}
             slots={TIME_MACHINE_SLOTS}
             current={commit}
-            onSelect={(i) => { setCommit(i); setLevel('L0'); }}
+            onSelect={(i) => go({ commit: i, level: 'L0' })}
           />
         </div>
 
@@ -157,21 +185,21 @@ export function Explorer() {
               score={data.score}
               commits={timeline}
               viewing={commit}
-              onBackToHead={() => setCommit(0)}
-              onJump={(l) => setLevel(l as LevelId)}
+              onBackToHead={() => go({ commit: 0 })}
+              onJump={(l) => go({ level: l as LevelId })}
             />
           ) : level === 'L1' ? (
             <SystemLevel effects={data.effects} />
           ) : level === 'L2' ? (
             <PackagesLevel
               packages={data.packages}
-              onSelect={(id) => { setPkg(id); setFile(null); setLevel('L3'); }}
+              onSelect={(id) => go({ pkg: id, file: null, level: 'L3' })}
             />
           ) : level === 'L3' ? (
             <FilesLevel
               files={files}
               scopeName={packageName(pkg)}
-              onSelect={(id) => { setFile(id); setLevel('L4'); }}
+              onSelect={(id) => go({ file: id, level: 'L4' })}
             />
           ) : level === 'L4' ? (
             <TypesLevel types={types} />

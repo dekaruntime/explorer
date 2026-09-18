@@ -32,6 +32,12 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+html {
+  /* Reserve the scrollbar's width whether or not one is needed. The Score
+     elevation is long and System is short, so without this the page narrows and
+     widens as you move between them. */
+  scrollbar-gutter: stable;
+}
 body {
   background: var(--ground); color: var(--ink);
   font-family: var(--ui); font-size: 15px; line-height: 1.55;

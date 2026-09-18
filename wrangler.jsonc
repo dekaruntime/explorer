@@ -1,0 +1,20 @@
+{
+  // Deploy configuration lives in the repository rather than only in the
+  // dashboard, so a build is reproducible from a checkout and a change to it
+  // arrives as a reviewable diff.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cqx-web",
+  "compatibility_date": "2026-09-18",
+
+  // Static assets with no Worker script: there is no server here. The analysis
+  // runs in the visitor's browser, so every request is a file.
+  // Navigation is by query string, so every request is for `/` and there is no
+  // path routing to arrange. A missing file is a missing file.
+  "assets": {
+    "directory": "./dist"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

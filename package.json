@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build && node scripts/relative-urls.mjs",
-    "preview": "astro preview",
-    "check": "astro check && tsc --noEmit"
+    "preview": "npm run build && wrangler dev",
+    "check": "astro check && tsc --noEmit",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@astrojs/react": "^4.2.0",
@@ -19,6 +20,7 @@
     "@astrojs/check": "^0.9.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "wrangler": "^4.0.0"
   }
 }
