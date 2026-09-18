@@ -149,11 +149,11 @@ function howMany(sources: number): number {
   const byMemory = gb <= 2 ? 2 : gb <= 4 ? 3 : 4;
   // One file per reader is not a division of labour.
   const useful = Math.max(1, Math.floor(sources / 400));
-  // Four, and not more: past that the reading is no longer what the wait is
-  // made of. Eight readers finish makepad's parse in 5.7 seconds instead of
-  // 7.2 and the whole analysis in the same 33, because what is left — merging
-  // what they found and collecting what they wrote — happens once whatever
-  // they number.
+  // Four, and not more. Eight readers finish makepad in 10.8 seconds against
+  // four readers' 11.6, which is not worth four more threads: the parse stopped
+  // dividing cleanly well before the thread count ran out. Where eight does win
+  // is memory — 583 MB against 860 — and at 860 there is no longer a ceiling
+  // worth buying headroom against.
   return Math.max(2, Math.min(byMemory, cores - 1, useful));
 }
 
