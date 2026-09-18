@@ -64,18 +64,84 @@ async function api<T>(url: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** The commits a time machine offers, newest first. One request. */
-export async function fetchCommits(repo: string, count: number) {
-  const commits = await api<
-    { sha: string; commit: { message: string; author: { name: string; date: string } } }[]
-  >(`${API}/repos/${repo}/commits?per_page=${count}`);
-  return commits.map((c) => ({
-    sha: c.sha,
-    short: c.sha.slice(0, 8),
-    subject: c.commit.message.split('\n')[0] ?? '',
-    author: c.commit.author.name,
-    date: c.commit.author.date,
-  }));
+export interface CommitRef {
+  sha: string;
+  short: string;
+  subject: string;
+  author: string;
+  date: string;
+}
+
+/**
+ * The one thing here that cannot be cached forever.
+ *
+ * Everything else is addressed by a commit or a blob and so can never go stale,
+ * but a repository grows new commits, and a timeline that hid one would be
+ * worse than a request. A minute is short enough that nobody notices and long
+ * enough that reloading a page repeatedly — the common case while reading —
+ * costs nothing.
+ */
+const TIMELINES = 'cqx-timelines-v1';
+const FRESH_FOR = 60_000;
+
+interface Timeline {
+  at: number;
+  commits: CommitRef[];
+}
+
+async function timelines(): Promise<Cache | null> {
+  try {
+    return await caches.open(TIMELINES);
+  } catch {
+    return null;
+  }
+}
+
+/** The commits a time machine offers, newest first. One request at most. */
+export async function fetchCommits(repo: string, count: number): Promise<CommitRef[]> {
+  const cache = await timelines();
+  const url = `https://cqx.invalid/commits/${repo}`;
+  let stale: Timeline | null = null;
+  try {
+    const hit = await cache?.match(url);
+    if (hit) {
+      const held = (await hit.json()) as Timeline;
+      if (Date.now() - held.at < FRESH_FOR && held.commits.length >= count) {
+        return held.commits.slice(0, count);
+      }
+      stale = held;
+    }
+  } catch {
+    // Treat an unreadable cache as an empty one.
+  }
+
+  try {
+    const commits = await api<
+      { sha: string; commit: { message: string; author: { name: string; date: string } } }[]
+    >(`${API}/repos/${repo}/commits?per_page=${Math.max(count, 20)}`);
+    const held: Timeline = {
+      at: Date.now(),
+      commits: commits.map((c) => ({
+        sha: c.sha,
+        short: c.sha.slice(0, 8),
+        subject: c.commit.message.split('\n')[0] ?? '',
+        author: c.commit.author.name,
+        date: c.commit.author.date,
+      })),
+    };
+    try {
+      await cache?.put(url, new Response(JSON.stringify(held)));
+    } catch {
+      // Storage full or unavailable; the timeline is still good for this view.
+    }
+    return held.commits.slice(0, count);
+  } catch (e) {
+    // Rate limited, or offline. An hour-old timeline is worth more than an
+    // error page — the commits on it are still real, there may just be a newer
+    // one missing.
+    if (stale) return stale.commits.slice(0, count);
+    throw e;
+  }
 }
 
 /** Every file in a commit, with the id of its contents. One request. */
