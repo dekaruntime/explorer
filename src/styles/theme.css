@@ -78,7 +78,14 @@ span.brand b { color: var(--aink); }
 }
 .picker input::placeholder { color: var(--faint); }
 .picker select:hover { border-color: var(--amber); }
-.tot { font-family: var(--mono); font-size: 12px; color: var(--faint); margin-left: auto; font-variant-numeric: tabular-nums; }
+/* Right-aligned and reserved: the numbers inside it change width as they are
+   learned, and without a floor the whole line slides. */
+.tot {
+  font-family: var(--mono); font-size: 12px; color: var(--faint);
+  margin-left: auto; font-variant-numeric: tabular-nums;
+  min-width: 34ch; text-align: right;
+}
+@media (max-width: 860px) { .tot { min-width: 0; } }
 .tot b { color: var(--ink); font-weight: 600; }
 .tmlink { color: var(--aink); text-decoration: none; }
 .tmlink:hover { text-decoration: underline; }
@@ -139,6 +146,9 @@ h2 { margin: 0 0 3px; font-size: 24px; letter-spacing: -.02em; text-wrap: balanc
 .ring svg { width: 62px; height: 62px; display: block; }
 .ring .tr { fill: none; stroke-width: 4; opacity: .35; }
 .ring .ar { fill: none; stroke-width: 4; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
+/* The arc is swept in JavaScript so it stays in step with the figure; only the
+   colour crosses a band on its own, and that is worth easing. */
+.ring .ar, .ring .tr, .ring .nm { transition: stroke .3s ease, fill .3s ease; }
 .ring .nm { font-family: var(--mono); font-size: 19px; font-weight: 600; dominant-baseline: central; text-anchor: middle; }
 .ring .cap { font-size: 12.5px; font-weight: 500; color: var(--ink); }
 .ring .dl { font-family: var(--mono); font-size: 9.5px; color: var(--faint); letter-spacing: -.01em; }
@@ -243,3 +253,26 @@ tbody tr:hover { background: var(--raised); }
 }
 .theme-toggle:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 7%, transparent); }
 .theme-toggle svg { width: 16px; height: 16px; display: block; }
+
+/* A report that is being replaced. It stays legible and stays exactly where it
+   is — dimming it is enough to say it is last commit's, and moving it is what
+   made every click flash. */
+.busy > *:not(.working) { opacity: .45; transition: opacity .15s ease; }
+.working {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0 10px;
+  background: var(--background);
+  font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+}
+.working .bar { flex: 1; max-width: 240px; margin: 0; }
+
+/* The cross-fade between one view and the next. Short: it is covering a swap,
+   not performing for anyone. A reader who asked for less motion gets none —
+   the API is not called at all in that case. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 140ms;
+  }
+}

@@ -1,5 +1,6 @@
 import type { Commit, Score } from "../../lib/types";
 import { band } from "../../lib/types";
+import { useEased } from "../../lib/animate";
 
 const CATEGORY_MEANING: Record<string, string> = {
   quality:
@@ -29,6 +30,10 @@ function Ring({
 }) {
   const r = 26;
   const circumference = 2 * Math.PI * r;
+  // The arc and the figure both follow the sweep; the colour follows the score
+  // itself, so a ring crossing a band changes colour when it earns it rather
+  // than when the animation happens to pass the threshold.
+  const swept = useEased(value);
   const colour = `var(--${band(value)})`;
   return (
     <button className="ring" onClick={onSelect}>
@@ -43,10 +48,10 @@ function Ring({
           r={r}
           stroke={colour}
           strokeDasharray={circumference.toFixed(1)}
-          strokeDashoffset={(circumference * (1 - value / 100)).toFixed(1)}
+          strokeDashoffset={(circumference * (1 - swept / 100)).toFixed(2)}
         />
         <text className="nm" x="31" y="31" fill={colour}>
-          {value}
+          {Math.round(swept)}
         </text>
       </svg>
       <span className="cap">

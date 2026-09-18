@@ -5,16 +5,13 @@ import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
 import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
 import { liveDataset, liveIndex, type Stage } from '../lib/live';
 import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
+import { transition } from '../lib/transition';
 import { ElevationRail, type Elevation } from './ElevationRail';
 import { RepoInput } from './RepoInput';
 import { ThemePicker } from './ThemePicker';
 import { TimeMachine } from './TimeMachine';
-import { ScoreLevel } from './levels/Score';
-import { SystemLevel } from './levels/System';
-import { PackagesLevel } from './levels/Packages';
-import { FilesLevel } from './levels/Files';
-import { TypesLevel } from './levels/Types';
-import { FunctionsLevel } from './levels/Functions';
+import { LevelView } from './LevelView';
+import { Analysing, Working } from './Loading';
 
 const TIME_MACHINE_SLOTS = 5;
 
@@ -89,12 +86,28 @@ export function Explorer() {
 
   /** Changes the view and records it, so back returns here. */
   const go = (patch: Partial<View>) => {
-    setView((current) => {
-      const next = { ...current, ...patch };
-      if (sameView(current, next)) return current;
-      window.history.pushState(next, '', toPath(next));
-      return next;
-    });
+    // Faded, because an elevation swaps its whole contents at once and a hard
+    // cut reads as a flash. A commit fades later instead, when its report
+    // arrives — that is the swap worth softening.
+    transition(() =>
+      setView((current) => {
+        const next = { ...current, ...patch };
+        if (sameView(current, next)) return current;
+        window.history.pushState(next, '', toPath(next));
+        // A different elevation or a different scope is a different view, and
+        // it starts at its beginning. Landing partway down it — or wherever
+        // the browser clamps a scroll when the new view is shorter — loses the
+        // reader's place without giving them another one.
+        //
+        // A commit is not a different view. It is the same one a moment
+        // earlier, which is the whole point of stepping through them, so the
+        // page stays exactly where it is.
+        const moved =
+          next.level !== current.level || next.pkg !== current.pkg || next.file !== current.file;
+        if (moved) window.scrollTo({ top: 0 });
+        return next;
+      }),
+    );
   };
 
   useEffect(() => {
@@ -159,7 +172,11 @@ export function Explorer() {
   useEffect(() => {
     if (!source || !at) return;
     let live = true;
-    setData(null);
+    // Deliberately not clearing the report: the commit is changing, not the
+    // repository, and a page that empties itself to fetch its replacement
+    // flashes the whole of its content on every click. What is on screen stays
+    // there, marked as busy, until there is something to put in its place.
+    // Changing repository does clear it — that is the effect above.
     setStage(null);
     loadDataset(source, at)
       .then(async (found) => {
@@ -178,7 +195,9 @@ export function Explorer() {
       .then((found) => {
         if (!live) return;
         if (found) {
-          setData(found);
+          // The report on screen is the previous commit's. This is the moment
+          // it becomes another's, so it is the moment worth fading.
+          transition(() => setData(found));
           return;
         }
         // The store keeps every commit it has ever been given, so an address
@@ -240,17 +259,18 @@ export function Explorer() {
     return data.functions;
   }, [data, pkg, filePath]);
 
-  // The elevations exist whether or not their contents have arrived. Deriving
-  // the whole rail from the data emptied it during every analysis, so the page
-  // lost its left-hand side and everything jumped when it came back. The names
-  // are fixed; only the counts are waiting on something.
+  // The elevations exist whether or not their contents have arrived, and they
+  // keep their size while they wait. An empty count collapsed the line under
+  // each name, taking 16px off every button and 96px off the rail — so the
+  // page lost its left-hand side and put it back on every commit. Nothing is
+  // known yet, and nothing is what zero says.
   const levels: Elevation[] = !source || error ? [] : [
-    { id: 'L0', name: 'Score', count: data ? `${Object.keys(data.score.scores).length} categories` : '' },
-    { id: 'L1', name: 'System', count: data ? `${data.effects.filter((e) => e.k === 'spawns').length} spawns` : '' },
-    { id: 'L2', name: 'Packages', count: data ? `${data.packages.length} crates` : '' },
-    { id: 'L3', name: 'Files', count: data ? data.files.length.toLocaleString() : '' },
-    { id: 'L4', name: 'Types', count: data ? data.totals.types.toLocaleString() : '' },
-    { id: 'L5', name: 'Functions', count: data ? data.totals.functions.toLocaleString() : '' },
+    { id: 'L0', name: 'Score', count: `${data ? Object.keys(data.score.scores).length : 0} categories` },
+    { id: 'L1', name: 'System', count: `${data ? data.effects.filter((e) => e.k === 'spawns').length : 0} spawns` },
+    { id: 'L2', name: 'Packages', count: `${data ? data.packages.length : 0} crates` },
+    { id: 'L3', name: 'Files', count: (data ? data.files.length : 0).toLocaleString() },
+    { id: 'L4', name: 'Types', count: (data ? data.totals.types : 0).toLocaleString() },
+    { id: 'L5', name: 'Functions', count: (data ? data.totals.functions : 0).toLocaleString() },
   ];
 
   const scopeBar =
@@ -291,23 +311,17 @@ export function Explorer() {
             suggestions={catalog?.entries.map((e) => e.repo) ?? []}
             onOpen={(repo) => go({ repo, pkg: null, file: null, ref: null, level: 'L0' })}
           />
+          {/* Always present, so the top of the page does not appear and
+              disappear on every click. Zero is what is known so far. */}
           <span className="tot">
-            {data ? (
-              <>
-                <b>{data.totals.nodes.toLocaleString()}</b> nodes ·{' '}
-                <b>{data.totals.edges.toLocaleString()}</b> edges ·{' '}
-                <b>{data.totals.lines.toLocaleString()}</b> lines
-                {/* Only when something actually timed it. A dataset written
-                    before cqx recorded this has no honest number to show. */}
-                {typeof data.analysis?.ms === 'number' ? (
-                  <>
-                    {' · analyzed in '}
-                    <b title={`cqx ${data.analysis.cqx}`}>{seconds(data.analysis.ms)}</b>
-                    s
-                  </>
-                ) : null}
-              </>
-            ) : null}
+            <b>{(data?.totals.nodes ?? 0).toLocaleString()}</b> nodes ·{' '}
+            <b>{(data?.totals.edges ?? 0).toLocaleString()}</b> edges ·{' '}
+            <b>{(data?.totals.lines ?? 0).toLocaleString()}</b> lines
+            {' · analyzed in '}
+            <b title={data?.analysis?.cqx ? `cqx ${data.analysis.cqx}` : undefined}>
+              {typeof data?.analysis?.ms === 'number' ? seconds(data.analysis.ms) : '0.0'}
+            </b>
+            s
           </span>
         </div>
       </header>
@@ -322,7 +336,11 @@ export function Explorer() {
             commits={timeline}
             slots={error ? 0 : TIME_MACHINE_SLOTS}
             current={commit}
-            onSelect={(i) => go({ ref: timeline[i]?.short ?? null, level: 'L0' })}
+            // Only the commit. Stepping back while reading the functions of a
+            // crate should show that crate's functions a commit earlier —
+            // being returned to the score each time is what makes comparing
+            // two commits impossible.
+            onSelect={(i) => go({ ref: timeline[i]?.short ?? null })}
           />
         </div>
 
@@ -334,67 +352,31 @@ export function Explorer() {
               Nothing to open. This deployment lists no repository, so name one
               in the address — <code>/{'{owner}'}/{'{repo}'}</code>.
             </div>
-          ) : stage ? (
-            <div className="empty">
-              <div>
-                Analysing <b>{source}</b>
-                {at ? <> at <b>{at}</b></> : null} — {stage.note}
-                {stage.total ? ` · ${stage.done} of ${stage.total}` : ''}
-              </div>
-              <div className="bar">
-                <i style={{ width: `${stage.total ? (stage.done / stage.total) * 100 : 8}%` }} />
-              </div>
-              <div className="dim">
-                Nobody has published this one, so it is being read from GitHub and
-                analysed here.
-              </div>
-            </div>
           ) : !data ? (
-            <div className="empty">Loading {source}{at ? ` at ${at}` : ''}…</div>
+            stage ? (
+              <Analysing repo={source} at={at} stage={stage} />
+            ) : (
+              <div className="empty">Loading {source}{at ? ` at ${at}` : ''}…</div>
+            )
           ) : (
-            <>
-          {level !== 'L0' && level !== 'L1' && level !== 'L2' ? scopeBar : null}
-
-          {level === 'L0' ? (
-            <ScoreLevel
-              score={data.score}
-              commits={timeline}
-              viewing={commit}
-              at={at}
-              onBackToHead={() => go({ ref: timeline[0]?.short ?? null })}
-              onJump={(l) => go({ level: l as LevelId })}
-            />
-          ) : level === 'L1' ? (
-            <SystemLevel effects={data.effects} />
-          ) : level === 'L2' ? (
-            <PackagesLevel
-              packages={data.packages}
-              onSelect={(id) =>
-                go({
-                  pkg: data.packages.find((p) => p.id === id)?.name ?? null,
-                  file: null,
-                  level: 'L3',
-                })
-              }
-            />
-          ) : level === 'L3' ? (
-            <FilesLevel
-              files={files}
-              scopeName={packageName}
-              onSelect={(id) =>
-                go({ file: data.files.find((f) => f.id === id)?.path ?? null, level: 'L4' })
-              }
-            />
-          ) : level === 'L4' ? (
-            <TypesLevel types={types} />
-          ) : (
-            <FunctionsLevel
-              functions={functions}
-              notable={data.totals.notable}
-              total={data.totals.functions}
-            />
-          )}
-            </>
+            // A report is up. Whatever is coming replaces it when it arrives,
+            // in place — the page does not empty itself to fetch its successor.
+            <div className={stage ? 'busy' : undefined}>
+              {stage ? <Working at={at} stage={stage} /> : null}
+              {level !== 'L0' && level !== 'L1' && level !== 'L2' ? scopeBar : null}
+              <LevelView
+                level={level}
+                data={data}
+                timeline={timeline}
+                viewing={commit}
+                at={at}
+                scopeName={packageName}
+                files={files}
+                types={types}
+                functions={functions}
+                onGo={go}
+              />
+            </div>
           )}
         </main>
       </div>
