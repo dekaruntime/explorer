@@ -34,8 +34,6 @@ export type Reply =
   | { type: 'done'; json: string; ms: number; fetch: number }
   | { type: 'error'; message: string };
 
-let module: Promise<Analysis> | null = null;
-
 const post = (reply: Reply) => self.postMessage(reply);
 
 /** Bumped when the shape changes, so an old dataset is not read as a new one. */
@@ -81,8 +79,11 @@ self.onmessage = async (event: MessageEvent<Request>) => {
 
     const began = performance.now();
     post({ type: 'stage', phase: 'listing', done: 0, total: 0, cached: 0 });
-    module ??= Analysis.load(wasm);
-    const [cqx, tree] = await Promise.all([module, fetchTree(repo, sha)]);
+    // A new instance each time, and the last one goes. Linear memory never
+    // shrinks, so an instance that has read a large repository would hand the
+    // next one a heap already spent. The compiled module is kept and reused;
+    // it is the expensive half and it holds nothing.
+    const [cqx, tree] = await Promise.all([Analysis.load(wasm), fetchTree(repo, sha)]);
 
     if (tree.truncated) {
       throw new Error(`${repo} is too large for GitHub to list in one request.`);
