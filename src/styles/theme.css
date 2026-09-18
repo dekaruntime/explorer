@@ -91,10 +91,20 @@ span.brand b { color: var(--aink); }
 .tmlink:hover { text-decoration: underline; }
 
 .shell { display: grid; grid-template-columns: 184px 1fr; gap: 26px; padding-block: 22px 60px; align-items: start; }
-.sidebar { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 18px; }
+/* The sidebar's own budget: the 12px it sticks to, plus a 10px buffer at the
+   bottom, leaves the time machine list the rest of the viewport to scroll in
+   without the page ever growing a scrollbar because of it. */
+.sidebar {
+  position: sticky; top: 12px; display: flex; flex-direction: column; gap: 18px;
+  max-height: calc(100vh - 22px);
+  /* 10px from the left edge of the page's own content area, not the 20px
+     every other column keeps — the menu is the one thing meant to sit flush. */
+  margin-left: -10px;
+}
+.sidebar > .rail:not(.tm) { flex: 0 0 auto; }
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr; gap: 14px; }
-  .sidebar { position: static; gap: 12px; }
+  .sidebar { position: static; gap: 12px; max-height: none; margin-left: -10px; }
 }
 
 .rail { display: flex; flex-direction: column; gap: 1px; }
@@ -117,12 +127,34 @@ span.brand b { color: var(--aink); }
   .lvl .c { display: none; }
 }
 
+/* Structurally its own thing, not a row of .lvl buttons any more: a heading,
+   the releases/commits tabs, then a list that takes whatever height the
+   sidebar's own budget leaves it and scrolls internally rather than growing
+   the page. flex-direction: column here outranks .rail's mobile row rule by
+   specificity, so the narrow layout does not need to repeat it. */
+.rail.tm { flex-direction: column; min-height: 0; }
 .rail.tm h3 { margin-bottom: 5px; }
 .rail.tm .lvl { padding: 4px 8px; grid-template-columns: 18px 1fr; gap: 7px; line-height: 1.2; }
 .rail.tm .t { color: var(--faint); font-weight: 600; font-size: 9.5px; }
 .rail.tm .n { font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: -.02em; }
 .rail.tm .c { font-size: 9.5px; letter-spacing: 0; }
 .rail.tm .lvl[aria-current='true'] .t { color: var(--aink); }
+/* An unresolved release: shown, honestly, but not a working button.
+   :not(.pending) keeps this off the shimmering "still arriving" commit slots,
+   which already say so a different way. */
+.rail.tm .lvl:disabled:not(.pending) { cursor: default; opacity: .55; }
+.tmtabs { display: flex; gap: 2px; flex: 0 0 auto; margin: 0 0 6px 2px; }
+.tmtab {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--faint); background: 0; border: 0; border-bottom: 2px solid var(--soft);
+  padding: 3px 2px 5px; cursor: pointer;
+}
+.tmtab:hover { color: var(--ink); }
+.tmtab[aria-selected='true'] { color: var(--aink); border-bottom-color: var(--amber); }
+/* The scrollable part. flex: 1 1 auto with min-height: 0 is what lets a flex
+   child shrink below its content's natural height at all — without it the
+   list would just push the sidebar past its max-height instead of scrolling. */
+.tmlist { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
 .tmnote { font-family: var(--mono); font-size: 9.5px; color: var(--faint); padding: 5px 8px 0; max-width: 184px; line-height: 1.35; }
 .lvl.pending { cursor: default; }
 .lvl.pending .n, .lvl.pending .c {

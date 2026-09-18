@@ -26,7 +26,7 @@ import type { Commit, Dataset } from './types';
 import type { RepoIndex } from './store';
 
 /** How many commits the rail offers for a repository being analysed here. */
-export const LIVE_COMMITS = 5;
+export const LIVE_COMMITS = 20;
 
 /**
  * Which half of the wait this is.

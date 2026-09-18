@@ -4,16 +4,19 @@ import type { Dataset } from '../lib/types';
 import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
 import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
 import { liveDataset, liveIndex, type Stage } from '../lib/live';
+import { fetchReleases, type ReleaseRef } from '../lib/github';
 import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
 import { transition } from '../lib/transition';
 import { ElevationRail, type Elevation } from './ElevationRail';
 import { RepoInput } from './RepoInput';
 import { ThemePicker } from './ThemePicker';
-import { TimeMachine } from './TimeMachine';
+import { TimeMachine, type TimeMachineTab } from './TimeMachine';
 import { LevelView } from './LevelView';
 import { Analysing, Working } from './Loading';
 
-const TIME_MACHINE_SLOTS = 5;
+const TIME_MACHINE_SLOTS = 20;
+/** The last N releases a time machine offers. */
+const RELEASE_SLOTS = 20;
 
 /**
  * Milliseconds as seconds, to one place — except below a tenth, where one
@@ -75,6 +78,16 @@ export function Explorer() {
   // leaves the old timeline standing for a render, and the head it names gets
   // written into the new repository's address — which then has no dataset.
   const [index, setIndex] = useState<{ of: string; timeline: RepoIndex } | null>(null);
+  // Releases, held separately from the timeline: they always come from the API
+  // — a published repository's own store knows nothing about tags — and a
+  // repository that has never released anything still has a timeline. Null
+  // means "asked for, not answered yet", which is what lets the tab default
+  // to commits only once the answer is known to be "none" rather than on
+  // every render before it arrives.
+  const [releases, setReleases] = useState<{ of: string; list: ReleaseRef[] } | null>(null);
+  // Null until the reader picks one. Until then the effective tab follows the
+  // data: releases, unless the repository turns out to have none.
+  const [tab, setTab] = useState<TimeMachineTab | null>(null);
   const [data, setData] = useState<Dataset | null>(null);
   // Which commit the report on screen is of. Not the same as the commit being
   // asked for: the address changes the moment it is clicked and the report
@@ -162,12 +175,21 @@ export function Explorer() {
     setData(null);
     setShownAt(null);
     setError(null);
+    setReleases(null);
+    setTab(null);
     // Published first, because it is already analysed. A repository nobody has
     // exported still has commits, and they cost one request to list.
     loadIndex(source)
       .then((found) => found ?? liveIndex(source))
       .then((found) => { if (live) setIndex({ of: source, timeline: found }); })
       .catch((e: Error) => { if (live) setError(e.message); });
+    // Independent of the timeline above: a published repository's store has no
+    // idea what its tags are, and an unpublished one is worth listing releases
+    // for before anything has been analysed. A repository with no releases —
+    // most of them — answers with an empty list, not an error.
+    fetchReleases(source, RELEASE_SLOTS)
+      .then((list) => { if (live) setReleases({ of: source, list }); })
+      .catch(() => { if (live) setReleases({ of: source, list: [] }); });
     return () => { live = false; };
   }, [source]);
 
@@ -252,13 +274,23 @@ export function Explorer() {
   }, [view, at]);
 
   /**
-   * Which slot the rail lights, and which commit the report describes. They
-   * differ while one is arriving: the rail answers the click immediately,
-   * because a menu that does not respond for a second feels broken, and the
-   * report goes on describing itself truthfully until it is replaced.
+   * Which commit the report describes. Differs from `ref` while one is
+   * arriving: the rail answers the click immediately, because a menu that
+   * does not respond for a second feels broken, and the report goes on
+   * describing itself truthfully until it is replaced.
    */
-  const selected = timeline.findIndex((c) => c.short === ref);
   const commit = timeline.findIndex((c) => c.short === shownAt);
+
+  // Releases are fetched independently of the timeline above (see the effect
+  // that clears them), so they can lag a render behind a repository change —
+  // the guard keeps the previous repository's list from flashing under the
+  // new one's tabs for a frame.
+  const releaseList = releases?.of === source ? releases.list : null;
+  // Null (still asked for) reads as the default, releases. Only once the
+  // answer is known to be empty does the fallback to commits apply — and only
+  // until the reader picks a tab themselves, which is remembered from there.
+  const effectiveTab: TimeMachineTab =
+    tab ?? (releaseList && releaseList.length === 0 ? 'commits' : 'releases');
 
   const packageName = view.pkg;
   const packageId =
@@ -381,13 +413,17 @@ export function Explorer() {
               the elevations rather than sitting there pretending. */}
           <TimeMachine
             commits={timeline}
+            releases={error ? [] : releaseList}
             slots={error ? 0 : TIME_MACHINE_SLOTS}
-            current={selected}
+            active={ref}
+            tab={effectiveTab}
+            onTabChange={setTab}
             // Only the commit. Stepping back while reading the functions of a
             // crate should show that crate's functions a commit earlier —
             // being returned to the score each time is what makes comparing
             // two commits impossible.
-            onSelect={(i) => go({ ref: timeline[i]?.short ?? null })}
+            onSelectCommit={(i) => go({ ref: timeline[i]?.short ?? null })}
+            onSelectRelease={(release) => go({ ref: release.sha?.slice(0, 8) ?? null })}
           />
         </div>
 

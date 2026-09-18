@@ -82,32 +82,43 @@ export interface CommitRef {
  * costs nothing.
  */
 const TIMELINES = 'cqx-timelines-v1';
+const RELEASES = 'cqx-releases-v1';
 const FRESH_FOR = 60_000;
 
-interface Timeline {
+interface Held<T> {
   at: number;
-  commits: CommitRef[];
+  items: T[];
 }
 
-async function timelines(): Promise<Cache | null> {
+async function openNamed(name: string): Promise<Cache | null> {
   try {
-    return await caches.open(TIMELINES);
+    return await caches.open(name);
   } catch {
     return null;
   }
 }
 
-/** The commits a time machine offers, newest first. One request at most. */
-export async function fetchCommits(repo: string, count: number): Promise<CommitRef[]> {
-  const cache = await timelines();
-  const url = `https://cqx.invalid/commits/${repo}`;
-  let stale: Timeline | null = null;
+/**
+ * A list that is cheap to ask for again and expensive to be wrong about for
+ * long: fresh for a minute, and — when GitHub is rate limited or offline —
+ * answered from whatever was last held rather than with an error page. Both
+ * the commit timeline and the release list are exactly this shape, so they
+ * share the one cache strategy rather than each inventing its own.
+ */
+async function cachedList<T>(
+  cacheName: string,
+  key: string,
+  count: number,
+  fetcher: () => Promise<T[]>,
+): Promise<T[]> {
+  const cache = await openNamed(cacheName);
+  let stale: Held<T> | null = null;
   try {
-    const hit = await cache?.match(url);
+    const hit = await cache?.match(key);
     if (hit) {
-      const held = (await hit.json()) as Timeline;
-      if (Date.now() - held.at < FRESH_FOR && held.commits.length >= count) {
-        return held.commits.slice(0, count);
+      const held = (await hit.json()) as Held<T>;
+      if (Date.now() - held.at < FRESH_FOR && held.items.length >= count) {
+        return held.items.slice(0, count);
       }
       stale = held;
     }
@@ -116,32 +127,106 @@ export async function fetchCommits(repo: string, count: number): Promise<CommitR
   }
 
   try {
-    const commits = await api<
-      { sha: string; commit: { message: string; author: { name: string; date: string } } }[]
-    >(`${API}/repos/${repo}/commits?per_page=${Math.max(count, 20)}`);
-    const held: Timeline = {
-      at: Date.now(),
-      commits: commits.map((c) => ({
+    const items = await fetcher();
+    const held: Held<T> = { at: Date.now(), items };
+    try {
+      await cache?.put(key, new Response(JSON.stringify(held)));
+    } catch {
+      // Storage full or unavailable; the list is still good for this view.
+    }
+    return held.items.slice(0, count);
+  } catch (e) {
+    // Rate limited, or offline. An hour-old list is worth more than an error
+    // page — the entries on it are still real, there may just be a newer one
+    // missing.
+    if (stale) return stale.items.slice(0, count);
+    throw e;
+  }
+}
+
+/** The commits a time machine offers, newest first. One request at most. */
+export async function fetchCommits(repo: string, count: number): Promise<CommitRef[]> {
+  return cachedList<CommitRef>(
+    TIMELINES,
+    `https://cqx.invalid/commits/${repo}`,
+    count,
+    async () => {
+      const commits = await api<
+        { sha: string; commit: { message: string; author: { name: string; date: string } } }[]
+      >(`${API}/repos/${repo}/commits?per_page=${Math.max(count, 20)}`);
+      return commits.map((c) => ({
         sha: c.sha,
         short: c.sha.slice(0, 8),
         subject: c.commit.message.split('\n')[0] ?? '',
         author: c.commit.author.name,
         date: c.commit.author.date,
-      })),
-    };
-    try {
-      await cache?.put(url, new Response(JSON.stringify(held)));
-    } catch {
-      // Storage full or unavailable; the timeline is still good for this view.
-    }
-    return held.commits.slice(0, count);
-  } catch (e) {
-    // Rate limited, or offline. An hour-old timeline is worth more than an
-    // error page — the commits on it are still real, there may just be a newer
-    // one missing.
-    if (stale) return stale.commits.slice(0, count);
-    throw e;
-  }
+      }));
+    },
+  );
+}
+
+export interface ReleaseRef {
+  tag: string;
+  name: string;
+  /** The commit it was cut from, when that could be resolved — null when it
+   *  could not (a tag GitHub did not return in the bulk lookup). */
+  sha: string | null;
+  publishedAt: string;
+}
+
+const FULL_SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * The releases a time machine offers, newest first. One request, plus a
+ * second only when needed.
+ *
+ * `target_commitish` is the field that sounds like the answer, but a release
+ * cut by automation usually leaves it as the branch it was cut from (`main`)
+ * rather than the commit — GitHub only ever promises "a branch or a commit
+ * SHA", not which. Where it is not a full sha, the tag itself is: one bulk
+ * request over `/tags` resolves every tag name to the commit it points at, in
+ * a single call rather than one per release.
+ */
+export async function fetchReleases(repo: string, count: number): Promise<ReleaseRef[]> {
+  return cachedList<ReleaseRef>(
+    RELEASES,
+    `https://cqx.invalid/releases/${repo}`,
+    count,
+    async () => {
+      const releases = await api<
+        {
+          tag_name: string;
+          name: string | null;
+          target_commitish: string;
+          published_at: string | null;
+          created_at: string;
+          draft: boolean;
+        }[]
+      >(`${API}/repos/${repo}/releases?per_page=${Math.max(count, 20)}`);
+      const visible = releases.filter((r) => !r.draft);
+
+      const needsLookup = visible.some((r) => !FULL_SHA.test(r.target_commitish));
+      let byTag = new Map<string, string>();
+      if (needsLookup) {
+        try {
+          const tags = await api<{ name: string; commit: { sha: string } }[]>(
+            `${API}/repos/${repo}/tags?per_page=100`,
+          );
+          byTag = new Map(tags.map((t) => [t.name, t.commit.sha]));
+        } catch {
+          // The releases are still worth listing even if none of them resolve
+          // to a commit — the tab shows what it has rather than nothing.
+        }
+      }
+
+      return visible.map((r) => ({
+        tag: r.tag_name,
+        name: r.name || r.tag_name,
+        sha: FULL_SHA.test(r.target_commitish) ? r.target_commitish : (byTag.get(r.tag_name) ?? null),
+        publishedAt: r.published_at ?? r.created_at,
+      }));
+    },
+  );
 }
 
 /** Every file in a commit, with the id of its contents. One request. */
