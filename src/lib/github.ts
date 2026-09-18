@@ -334,10 +334,15 @@ export async function fetchSource(
   const queue = [...tree.files];
   const worker = async () => {
     for (let entry = queue.pop(); entry; entry = queue.pop()) {
-      const key = `https://cqx.invalid/blob/${entry.sha}`;
+      // Contents are addressed by their git object id and by nothing else. An
+      // entry without one cannot be cached: every such file would share a key
+      // and take whichever arrived first, which is a wrong answer rather than
+      // a slow one.
+      const id = entry.sha;
+      const key = id ? `https://cqx.invalid/blob/${id}` : null;
       let content: string | null = null;
       try {
-        const hit = await cache?.match(key);
+        const hit = key ? await cache?.match(key) : null;
         if (hit) {
           content = await hit.text();
           cached++;
@@ -354,12 +359,12 @@ export async function fetchSource(
         }
         content = await response.text();
         try {
-          await cache?.put(key, new Response(content));
+          if (key) await cache?.put(key, new Response(content));
         } catch {
           // Storage full or unavailable; the analysis does not depend on it.
         }
       }
-      files.push({ path: entry.path, blob: entry.sha, content });
+      files.push({ path: entry.path, blob: id ?? '', content });
       done++;
       report();
     }

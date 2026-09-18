@@ -34,6 +34,16 @@ const SHA = /^[0-9a-f]{7,40}$/;
  *  describe a repository as it is now, which is a different kind of fact. */
 const BRIEFLY = 60_000;
 
+/**
+ * Bumped whenever the shape of what is kept changes.
+ *
+ * Without it, a fix to what the worker returns is undone by the worker's own
+ * cache: v1 held trees whose entries named their blob `blob`, and went on
+ * serving them after the code stopped producing them. Kept for good means
+ * kept for good.
+ */
+const SHAPE = 'v2';
+
 const json = (body: unknown, seconds: number) =>
   new Response(JSON.stringify(body), {
     headers: {
@@ -167,7 +177,7 @@ async function resolveTags(env: Env, repo: string, tags: string[]): Promise<Map<
 }
 
 const tagKey = (repo: string, tag: string) =>
-  `cache/${repo}/tags/${encodeURIComponent(tag)}.json`;
+  `cache/${SHAPE}/${repo}/tags/${encodeURIComponent(tag)}.json`;
 
 /** Manifests, the lockfile, and the code. The same rule the analysis uses. */
 const interesting = (path: string) =>
@@ -235,7 +245,7 @@ export default {
 
     try {
       if (what === 'commits') {
-        const key = `cache/${repo}/commits.json`;
+        const key = `cache/${SHAPE}/${repo}/commits.json`;
         const kept = await held<unknown[]>(env, key, BRIEFLY);
         if (kept) return json(kept, 60);
         const raw = await ask<
@@ -254,7 +264,7 @@ export default {
       }
 
       if (what === 'releases') {
-        const key = `cache/${repo}/releases.json`;
+        const key = `cache/${SHAPE}/${repo}/releases.json`;
         const kept = await held<unknown[]>(env, key, BRIEFLY);
         if (kept) return json(kept, 60);
 
@@ -280,7 +290,7 @@ export default {
       if (what === 'tree' && arg) {
         if (!SHA.test(arg)) return refuse(400, 'not a commit');
         // Kept for good: the files of a commit are what they were.
-        const key = `cache/${repo}/tree/${arg}.json`;
+        const key = `cache/${SHAPE}/${repo}/tree/${arg}.json`;
         const kept = await held<unknown>(env, key, Infinity);
         if (kept) return json(kept, 31536000);
         const raw = await ask<{
@@ -291,11 +301,13 @@ export default {
         const tree = {
           sha: raw.sha,
           truncated: raw.truncated,
-          // Two fields per file that matters, out of the eight GitHub sends for
-          // every file there is.
+          // Two fields per file that matters, out of the eight GitHub sends
+          // for every file there is. Named as GitHub names them: the reader
+          // keys its cache on `sha`, and calling it something else here made
+          // every file share one key and take the first file's contents.
           files: raw.tree
             .filter((e) => e.type === 'blob' && interesting(e.path))
-            .map((e) => ({ path: e.path, blob: e.sha })),
+            .map((e) => ({ path: e.path, sha: e.sha })),
         };
         await keep(env, key, tree);
         return json(tree, 31536000);
@@ -308,7 +320,7 @@ export default {
       // still its commits, with one perhaps missing.
       const stale =
         what === 'commits' || what === 'releases'
-          ? await held<unknown>(env, `cache/${repo}/${what}.json`, Infinity)
+          ? await held<unknown>(env, `cache/${SHAPE}/${repo}/${what}.json`, Infinity)
           : null;
       if (stale) return json(stale, 60);
       return refuse(502, `github would not answer: ${why}`);
