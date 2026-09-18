@@ -1,0 +1,30 @@
+---
+import '../styles/theme.css';
+import { Explorer } from '../components/Explorer';
+
+// The dataset is fetched rather than inlined. Inlining it put 890KB of JSON
+// into the document; as an asset it is cached separately, and it is the same
+// path a repository analysed live will take.
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>CodeQuality Explorer</title>
+    <meta
+      name="description"
+      content="A queryable graph of a codebase: what it contains, what it touches, and what crosses its boundaries."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@400;500;600;700&display=swap"
+    />
+  </head>
+  <body>
+    <Explorer client:load />
+  </body>
+</html>
