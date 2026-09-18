@@ -1,4 +1,28 @@
+import { useEffect, useRef, useState } from 'react';
+
 import type { Stage } from '../lib/live';
+
+/**
+ * Seconds since a phase began.
+ *
+ * A bar that cannot say how far along it is can at least say how long it has
+ * been going. makepad takes over two minutes to parse, and for all of it the
+ * only honest thing to report is the clock.
+ */
+function useElapsed(running: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+  const from = useRef(0);
+  useEffect(() => {
+    if (!running) {
+      setSeconds(0);
+      return;
+    }
+    from.current = Date.now();
+    const timer = setInterval(() => setSeconds(Math.floor((Date.now() - from.current) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+  return seconds;
+}
 
 /**
  * Saying that something is happening, without taking the page away to say it.
@@ -45,11 +69,19 @@ function Phase({
       {state === 'done' ? (
         <Tick />
       ) : (
-        // A phase that has not started has nothing to report and should not
-        // look as though it is reporting it: only a running phase of unknown
-        // length gets the moving bar.
+        // Three cases, and the widths must not fight. A measured phase sets
+        // its own; a running phase of unknown length leaves it to the stylesheet
+        // to animate — an inline width of zero here made that bar invisible,
+        // which is what a hundred and thirty nine seconds of makepad looked
+        // like; and a phase that has not started shows an empty track.
         <div className={`bar${fraction === undefined && state === 'running' ? ' unknown' : ''}`}>
-          <i style={fraction === undefined ? { width: 0 } : { width: `${fraction * 100}%` }} />
+          {fraction !== undefined ? (
+            <i style={{ width: `${fraction * 100}%` }} />
+          ) : state === 'running' ? (
+            <i />
+          ) : (
+            <i style={{ width: 0 }} />
+          )}
         </div>
       )}
       {detail ? <span className="dt">{detail}</span> : null}
@@ -75,8 +107,24 @@ export function Phases({ stage }: { stage: Stage }) {
               : `${stage.total} files`
         }
       />
-      <Phase label="running analysis" state={fetched ? 'running' : 'waiting'} />
+      <Analysis running={fetched} total={stage.total} />
     </div>
+  );
+}
+
+/**
+ * The parse. It has no progress to report — it is one call into the module —
+ * so it reports the clock instead, which after the first few seconds is the
+ * thing a reader actually wants to know.
+ */
+function Analysis({ running, total }: { running: boolean; total: number }) {
+  const seconds = useElapsed(running);
+  return (
+    <Phase
+      label="running analysis"
+      state={running ? 'running' : 'waiting'}
+      detail={running ? (seconds > 2 ? `${seconds}s · ${total} files` : `${total} files`) : undefined}
+    />
   );
 }
 
