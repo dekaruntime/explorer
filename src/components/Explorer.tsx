@@ -271,15 +271,6 @@ export function Explorer() {
           ) : (
             <span className="brand">c<b>q</b>x</span>
           )}
-          <span className="repo">
-            {repoIndex?.commits_url ? (
-              <a className="tmlink" href={repoIndex.commits_url} target="_blank" rel="noopener">
-                {repoIndex.repo} ↗
-              </a>
-            ) : (
-              repoIndex?.repo ?? source ?? 'loading…'
-            )}
-          </span>
           <RepoInput
             value={source}
             suggestions={catalog?.entries.map((e) => e.repo) ?? []}
