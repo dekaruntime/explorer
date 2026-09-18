@@ -151,7 +151,9 @@ h2 { margin: 0 0 3px; font-size: 24px; letter-spacing: -.02em; text-wrap: balanc
 .ring .ar, .ring .tr, .ring .nm { transition: stroke .3s ease, fill .3s ease; }
 .ring .nm { font-family: var(--mono); font-size: 19px; font-weight: 600; dominant-baseline: central; text-anchor: middle; }
 .ring .cap { font-size: 12.5px; font-weight: 500; color: var(--ink); }
-.ring .dl { font-family: var(--mono); font-size: 9.5px; color: var(--faint); letter-spacing: -.01em; }
+/* Reserved whether or not it has something to say, so a ring is the same
+   height as its neighbours and stays that height across commits. */
+.ring .dl { font-family: var(--mono); font-size: 9.5px; color: var(--faint); letter-spacing: -.01em; min-height: 1.2em; }
 .ring .dl.up { color: var(--pass); } .ring .dl.dn { color: var(--fail); }
 .ring:hover .cap { color: var(--aink); }
 
@@ -227,6 +229,12 @@ tbody tr:hover { background: var(--raised); }
 }
 .empty .bar i { display: block; height: 100%; background: var(--aink); transition: width .2s ease; }
 .empty .dim { font-size: 12px; margin-top: 10px; }
+/* A page waiting for its first report is a small box on a tall page, and
+   everything below it — the colophon especially — was being pushed down the
+   moment the report arrived. Holding roughly a screen means what arrives fills
+   space that was already there. */
+main { min-height: 72vh; }
+
 .empty { padding: 38px 18px; text-align: center; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; }
 
 .colophon {
@@ -258,14 +266,29 @@ tbody tr:hover { background: var(--raised); }
    is — dimming it is enough to say it is last commit's, and moving it is what
    made every click flash. */
 .busy > *:not(.working) { opacity: .45; transition: opacity .15s ease; }
+/* Above the content, not before it. In the flow it pushed the whole report
+   down on arrival and let it snap back on departure — announcing the wait by
+   moving the thing being waited for. */
 .working {
-  position: sticky; top: 0; z-index: 5;
+  position: fixed; z-index: 40;
+  left: 50%; transform: translateX(-50%);
+  bottom: 28px;
   display: flex; align-items: center; gap: 12px;
-  padding: 8px 0 10px;
-  background: var(--background);
+  padding: 9px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 6px 24px rgb(0 0 0 / .13);
+  backdrop-filter: blur(6px);
   font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+  max-width: min(92vw, 520px);
 }
-.working .bar { flex: 1; max-width: 240px; margin: 0; }
+.working > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.working .bar { width: 120px; flex: none; margin: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .working { animation: rise .18s ease both; }
+}
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
 
 /* The cross-fade between one view and the next. Short: it is covering a swap,
    not performing for anyone. A reader who asked for less motion gets none —
