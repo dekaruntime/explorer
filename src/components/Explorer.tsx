@@ -240,13 +240,17 @@ export function Explorer() {
     return data.functions;
   }, [data, pkg, filePath]);
 
-  const levels: Elevation[] = !data ? [] : [
-    { id: 'L0', name: 'Score', count: `${Object.keys(data.score.scores).length} categories` },
-    { id: 'L1', name: 'System', count: `${data.effects.filter((e) => e.k === 'spawns').length} spawns` },
-    { id: 'L2', name: 'Packages', count: `${data.packages.length} crates` },
-    { id: 'L3', name: 'Files', count: data.files.length.toLocaleString() },
-    { id: 'L4', name: 'Types', count: data.totals.types.toLocaleString() },
-    { id: 'L5', name: 'Functions', count: data.totals.functions.toLocaleString() },
+  // The elevations exist whether or not their contents have arrived. Deriving
+  // the whole rail from the data emptied it during every analysis, so the page
+  // lost its left-hand side and everything jumped when it came back. The names
+  // are fixed; only the counts are waiting on something.
+  const levels: Elevation[] = !source || error ? [] : [
+    { id: 'L0', name: 'Score', count: data ? `${Object.keys(data.score.scores).length} categories` : '' },
+    { id: 'L1', name: 'System', count: data ? `${data.effects.filter((e) => e.k === 'spawns').length} spawns` : '' },
+    { id: 'L2', name: 'Packages', count: data ? `${data.packages.length} crates` : '' },
+    { id: 'L3', name: 'Files', count: data ? data.files.length.toLocaleString() : '' },
+    { id: 'L4', name: 'Types', count: data ? data.totals.types.toLocaleString() : '' },
+    { id: 'L5', name: 'Functions', count: data ? data.totals.functions.toLocaleString() : '' },
   ];
 
   const scopeBar =

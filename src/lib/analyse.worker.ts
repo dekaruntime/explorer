@@ -10,6 +10,12 @@
  * whole pipeline in one place, and it means the file contents are never copied
  * across a postMessage boundary — a few megabytes of source that would other-
  * wise be cloned twice.
+ *
+ * A finished dataset is kept, for the same reason its files are: it is named by
+ * a commit and a commit does not change, so it can never be stale. Without that
+ * every step along the time machine paid the full analysis again — 0.7s for a
+ * small repository, seven for a large one — to produce bytes it had already
+ * produced a moment earlier.
  */
 
 import { Analysis } from './cqx';
@@ -32,9 +38,47 @@ let module: Promise<Analysis> | null = null;
 
 const post = (reply: Reply) => self.postMessage(reply);
 
+/** Bumped when the shape changes, so an old dataset is not read as a new one. */
+const DATASETS = 'cqx-datasets-v1';
+
+/** A commit, and the version of cqx that read it. */
+const key = (repo: string, sha: string) => `https://cqx.invalid/dataset/${repo}/${sha}`;
+
+async function remembered(repo: string, sha: string): Promise<Reply | null> {
+  try {
+    const hit = await (await caches.open(DATASETS)).match(key(repo, sha));
+    if (!hit) return null;
+    const { json, ms } = (await hit.json()) as { json: string; ms: number };
+    return { type: 'done', json, ms };
+  } catch {
+    // Private windows, blocked storage, a cache that misbehaves: analyse it.
+    return null;
+  }
+}
+
+async function remember(repo: string, sha: string, json: string, ms: number) {
+  try {
+    await (await caches.open(DATASETS)).put(
+      key(repo, sha),
+      new Response(JSON.stringify({ json, ms }), {
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  } catch {
+    // Storage full or unavailable. Nothing here depends on it.
+  }
+}
+
 self.onmessage = async (event: MessageEvent<Request>) => {
   const { repo, sha, wasm } = event.data;
   try {
+    // Already analysed in this browser: no tree request, no files, no parsing.
+    const known = await remembered(repo, sha);
+    if (known) {
+      post(known);
+      return;
+    }
+
     post({ type: 'stage', note: 'reading the file list', done: 0, total: 0 });
     module ??= Analysis.load(wasm);
     const [cqx, tree] = await Promise.all([module, fetchTree(repo, sha)]);
@@ -60,6 +104,8 @@ self.onmessage = async (event: MessageEvent<Request>) => {
     for (const file of files) cqx.addFile(file.path, file.content);
 
     const { json, ms } = cqx.dataset(repo);
+    // Kept before it is sent, so a second click cannot race the first.
+    await remember(repo, sha, json, ms);
     post({ type: 'done', json, ms });
   } catch (e) {
     post({ type: 'error', message: e instanceof Error ? e.message : String(e) });
