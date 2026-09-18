@@ -25,6 +25,14 @@ import { Explorer } from '../components/Explorer';
     />
   </head>
   <body>
+    <script is:inline>
+      // Before the first paint: a saved theme applied after hydration would show
+      // the wrong one first, which is worse than not offering the choice.
+      try {
+        var t = localStorage.getItem('cqx-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
     <Explorer client:load />
   </body>
 </html>
