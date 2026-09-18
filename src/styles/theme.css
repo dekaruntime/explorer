@@ -228,7 +228,6 @@ tbody tr:hover { background: var(--raised); }
   background: var(--soft); border-radius: 2px; overflow: hidden;
 }
 .empty .bar i { display: block; height: 100%; background: var(--aink); transition: width .2s ease; }
-.empty .dim { font-size: 12px; margin-top: 10px; }
 /* A page waiting for its first report is a small box on a tall page, and
    everything below it — the colophon especially — was being pushed down the
    moment the report arrived. Holding roughly a screen means what arrives fills
@@ -286,7 +285,7 @@ main { min-height: 72vh; }
 .working .at { font-weight: 600; color: var(--ink); }
 
 /* One row per phase: what is being waited for, and how far along it is. */
-.phases { display: flex; flex-direction: column; gap: 5px; }
+.phases { display: flex; flex-direction: column; gap: 11px; }
 .phase { display: flex; align-items: center; gap: 9px; line-height: 1.5; }
 .phase .lb { min-width: 108px; }
 .phase .dt { color: var(--faint); font-size: 10.5px; white-space: nowrap; }
@@ -301,7 +300,10 @@ main { min-height: 72vh; }
 @media (prefers-reduced-motion: reduce) {
   .phase .bar.unknown i { animation: none; left: 0; width: 100%; opacity: .5; }
 }
-.empty .phases { max-width: 340px; margin: 16px auto; text-align: left; font-family: var(--mono); font-size: 11.5px; }
+/* The room someone waits in. Loose enough not to feel like an error. */
+.waiting-room { padding: 46px 18px 52px; }
+.waiting-room .ttl { font-size: 15px; color: var(--ink); margin-bottom: 26px; }
+.empty .phases { max-width: 340px; margin: 0 auto; text-align: left; font-family: var(--mono); font-size: 11.5px; }
 @media (prefers-reduced-motion: no-preference) {
   .working { animation: rise .18s ease both; }
 }
