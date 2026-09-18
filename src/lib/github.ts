@@ -57,8 +57,10 @@ async function api<T>(url: string): Promise<T> {
   const response = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
   if (response.status === 403 || response.status === 429) {
     const reset = response.headers.get('x-ratelimit-reset');
-    const when = reset ? new Date(Number(reset) * 1000).toLocaleTimeString() : 'shortly';
-    throw new Error(`GitHub rate limit reached — it resets at ${when}. Signing in would raise it.`);
+    const when = reset
+      ? `at ${new Date(Number(reset) * 1000).toLocaleTimeString()}`
+      : 'shortly';
+    throw new Error(`GitHub rate limit reached — it resets ${when}. Signing in would raise it.`);
   }
   if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
   return (await response.json()) as T;
