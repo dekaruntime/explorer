@@ -8,10 +8,12 @@
 
   // Static assets with no Worker script: there is no server here. The analysis
   // runs in the visitor's browser, so every request is a file.
-  // Navigation is by query string, so every request is for `/` and there is no
-  // path routing to arrange. A missing file is a missing file.
+  // Addresses are paths — /dekaruntime/deka/7e8321c7/packages/deka_http — and
+  // none of them is a file on disk, so anything that does not match an asset is
+  // served the page and routed there.
   "assets": {
-    "directory": "./dist"
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
   },
 
   "observability": {

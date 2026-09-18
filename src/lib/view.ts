@@ -1,58 +1,113 @@
 /**
- * The view as a URL.
+ * The view as a path.
  *
- * Every navigation is addressable: a link can be shared, the back button works,
- * and a reload returns to where you were. The alternative — state that lives
- * only in memory — makes the browser's own controls lie.
+ * A URL should name the thing it shows, and be editable by hand:
+ *
+ *   /{org}/{repo}/{commit}/packages/{package}/functions
+ *
+ * Reads as: this repository, at this commit, that package, its functions. Every
+ * prefix of it is also a valid address, which is what makes it hackable — cut
+ * the last segment and you are one level out.
  */
 export type LevelId = 'L0' | 'L1' | 'L2' | 'L3' | 'L4' | 'L5';
 
 export interface View {
+  /** `owner/name`, as GitHub spells it. */
   repo: string;
+  /** Abbreviated commit, or null for head. */
+  ref: string | null;
   level: LevelId;
-  /** Package node id, e.g. `pkg:cli`. */
+  /** Package name, not node id — `deka_http`, not `pkg:deka_http`. */
   pkg: string | null;
-  /** File node id. */
+  /** File path relative to the repository. */
   file: string | null;
-  /** Index into the time machine, 0 being head. */
-  commit: number;
 }
 
-const LEVELS: LevelId[] = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'];
+/** The word that names each elevation in a path. */
+const WORD: Record<LevelId, string> = {
+  L0: 'score',
+  L1: 'system',
+  L2: 'packages',
+  L3: 'files',
+  L4: 'types',
+  L5: 'functions',
+};
 
-export function defaultView(repo: string): View {
-  return { repo, level: 'L0', pkg: null, file: null, commit: 0 };
+const LEVEL_OF: Record<string, LevelId> = Object.fromEntries(
+  Object.entries(WORD).map(([level, word]) => [word, level as LevelId]),
+) as Record<string, LevelId>;
+
+/** A lens that can follow a scope: types and functions are views of one thing. */
+const LENS = new Set(['types', 'functions']);
+
+export const defaultView = (repo: string): View => ({
+  repo,
+  ref: null,
+  level: 'L0',
+  pkg: null,
+  file: null,
+});
+
+/** Commit-ish: hex, long enough to mean something, never a keyword. */
+const looksLikeRef = (segment: string): boolean =>
+  /^[0-9a-f]{7,40}$/.test(segment) && !(segment in LEVEL_OF);
+
+export function parsePath(pathname: string, fallbackRepo: string): View {
+  const parts = pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  if (parts.length < 2) return defaultView(fallbackRepo);
+
+  const view = defaultView(`${parts[0]}/${parts[1]}`);
+  let rest = parts.slice(2);
+
+  if (rest.length > 0 && looksLikeRef(rest[0]!)) {
+    view.ref = rest[0]!;
+    rest = rest.slice(1);
+  }
+  if (rest.length === 0) return view;
+
+  // A lens may close the address, and a file path never ends in one — paths end
+  // in a file name. So the tail is read first.
+  let lens: LevelId | null = null;
+  const last = rest[rest.length - 1]!;
+  if (rest.length > 1 && LENS.has(last)) {
+    lens = LEVEL_OF[last]!;
+    rest = rest.slice(0, -1);
+  }
+
+  const head = rest[0]!;
+  if (head === 'packages') {
+    view.level = 'L2';
+    if (rest[1]) {
+      view.pkg = rest[1];
+      // A package shows its files, unless a lens asked for something else.
+      view.level = lens ?? 'L3';
+      if (rest[2] === 'files' && rest.length > 3) {
+        view.file = rest.slice(3).join('/');
+        view.level = lens ?? 'L4';
+      }
+    }
+  } else if (LEVEL_OF[head]) {
+    view.level = LEVEL_OF[head]!;
+  }
+  return view;
 }
 
-export function readView(fallbackRepo: string): View {
-  if (typeof window === 'undefined') return defaultView(fallbackRepo);
-  const params = new URLSearchParams(window.location.search);
-  const level = params.get('at');
-  const commit = Number.parseInt(params.get('commit') ?? '', 10);
-  return {
-    repo: params.get('repo') ?? fallbackRepo,
-    level: LEVELS.includes(level as LevelId) ? (level as LevelId) : 'L0',
-    pkg: params.get('pkg'),
-    file: params.get('file'),
-    commit: Number.isFinite(commit) && commit >= 0 ? commit : 0,
-  };
-}
+export function toPath(view: View): string {
+  const parts: string[] = [view.repo];
+  if (view.ref) parts.push(view.ref);
 
-/** Only what differs from the default is written, so a shared link stays short. */
-export function toQuery(view: View, defaultRepo: string): string {
-  const params = new URLSearchParams();
-  if (view.repo !== defaultRepo) params.set('repo', view.repo);
-  if (view.level !== 'L0') params.set('at', view.level);
-  if (view.pkg) params.set('pkg', view.pkg);
-  if (view.file) params.set('file', view.file);
-  if (view.commit !== 0) params.set('commit', String(view.commit));
-  const query = params.toString();
-  return query ? `?${query}` : window.location.pathname;
+  if (view.pkg) {
+    parts.push('packages', view.pkg);
+    if (view.file) parts.push('files', view.file);
+    // At a scope, the level is a lens on it — and the default needs no word.
+    const implied: LevelId = view.file ? 'L4' : 'L3';
+    if (view.level !== implied && LENS.has(WORD[view.level])) parts.push(WORD[view.level]);
+  } else if (view.level !== 'L0') {
+    parts.push(WORD[view.level]);
+  }
+
+  return '/' + parts.map((p) => p.split('/').map(encodeURIComponent).join('/')).join('/');
 }
 
 export const sameView = (a: View, b: View): boolean =>
-  a.repo === b.repo &&
-  a.level === b.level &&
-  a.pkg === b.pkg &&
-  a.file === b.file &&
-  a.commit === b.commit;
+  a.repo === b.repo && a.ref === b.ref && a.level === b.level && a.pkg === b.pkg && a.file === b.file;
