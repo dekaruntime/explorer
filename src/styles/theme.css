@@ -90,7 +90,17 @@ span.brand b { color: var(--aink); }
 .tmlink { color: var(--aink); text-decoration: none; }
 .tmlink:hover { text-decoration: underline; }
 
-.shell { display: grid; grid-template-columns: 184px 1fr; gap: 26px; padding-block: 22px 60px; align-items: start; }
+/* The menu column hugs the window with a small buffer rather than sitting
+   inside the page's centred gutter, and the header goes with it so the mark
+   stays over the rail. Arrived at by layout rather than arithmetic: a margin
+   computed from 100vw is wrong by the width of a scrollbar, which 100vw counts
+   and a centred column does not.
+   The reading column keeps a width worth reading at — a measure that grows
+   with the window is the reason pages have gutters in the first place. */
+.wrap.shell,
+.wrap.hdr { max-width: none; padding-inline: 10px 20px; }
+.shell { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 26px; padding-block: 22px 60px; align-items: start; }
+.shell > main { max-width: 980px; }
 /* The sidebar's own budget: the 12px it sticks to, plus a 10px buffer at the
    bottom, leaves the time machine list the rest of the viewport to scroll in
    without the page ever growing a scrollbar because of it. */
@@ -99,12 +109,11 @@ span.brand b { color: var(--aink); }
   max-height: calc(100vh - 22px);
   /* 10px from the left edge of the page's own content area, not the 20px
      every other column keeps — the menu is the one thing meant to sit flush. */
-  margin-left: -10px;
 }
 .sidebar > .rail:not(.tm) { flex: 0 0 auto; }
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr; gap: 14px; }
-  .sidebar { position: static; gap: 12px; max-height: none; margin-left: -10px; }
+  .sidebar { position: static; gap: 12px; max-height: none; }
 }
 
 .rail { display: flex; flex-direction: column; gap: 1px; }
