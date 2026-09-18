@@ -43,19 +43,27 @@ export interface Stage {
   cached: number;
 }
 
-let worker: Worker | null = null;
-
 /**
- * One worker per tab, so the module is compiled once however many repositories
- * are looked at. Named, as the tour names its own, so it is identifiable in a
- * profile rather than appearing as an anonymous thread.
+ * A thread per analysis, and it does not outlive the work.
+ *
+ * Nothing here accumulates on purpose, but a worker that has read six thousand
+ * files holds a wasm instance with gigabytes linear memory cannot give back, a
+ * heap the collector will reach when it reaches it, and no way to say it is
+ * nearly full. Handing that thread the next repository is how a tab that had
+ * read a large one stopped being able to read small ones.
+ *
+ * Ending it returns all of that at once and definitely, rather than hoping.
+ * What is worth keeping was never in the thread: the files and the finished
+ * datasets live in the browser's own storage, which outlives every worker.
+ *
+ * Named, as the tour names its own, so it is identifiable in a profile rather
+ * than appearing as an anonymous thread.
  */
-function hired(): Worker {
-  worker ??= new Worker(new URL('./analyse.worker.ts', import.meta.url), {
+function hire(): Worker {
+  return new Worker(new URL('./analyse.worker.ts', import.meta.url), {
     type: 'module',
     name: 'cqx-analysis',
   });
-  return worker;
 }
 
 /**
@@ -99,7 +107,12 @@ export function liveDataset(
   onStage?: (s: Stage) => void,
 ): Promise<Dataset> {
   return new Promise((resolve, reject) => {
-    const w = hired();
+    const w = hire();
+    const done = () => {
+      w.removeEventListener('message', listen);
+      // Everything it held goes with it: the instance, its memory, the heap.
+      w.terminate();
+    };
     const listen = (event: MessageEvent<Reply>) => {
       const reply = event.data;
       if (reply.type === 'stage') {
@@ -111,7 +124,7 @@ export function liveDataset(
         });
         return;
       }
-      w.removeEventListener('message', listen);
+      done();
       if (reply.type === 'error') {
         reject(new Error(reply.message));
         return;
@@ -127,6 +140,12 @@ export function liveDataset(
       data.analysis = { ms: reply.ms, cqx: data.analysis?.cqx ?? '', fetch: reply.fetch };
       resolve(data);
     };
+    // A thread that dies mid-analysis is a failure like any other, and saying
+    // so beats a promise that never settles.
+    w.addEventListener('error', (event: ErrorEvent) => {
+      done();
+      reject(new Error(event.message || 'the analysis stopped unexpectedly.'));
+    });
     w.addEventListener('message', listen);
     w.postMessage({ repo, sha, wasm: new URL('/cqx.wasm', location.href).href } satisfies Request);
   });
