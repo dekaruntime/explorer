@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { Dataset } from '../lib/types';
 import { loadCatalog, type Catalog } from '../lib/catalog';
-import { loadDataset, loadIndex, type RepoIndex } from '../lib/store';
+import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
 import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
 import { ElevationRail, type Elevation } from './ElevationRail';
 import { ThemePicker } from './ThemePicker';
@@ -55,20 +55,23 @@ export function Explorer() {
     // What exists comes from the deployment, not from this file.
     loadCatalog().then((found) => {
       if (!live) return;
+      // Before anything is fetched: where this deployment keeps its own data,
+      // if it keeps any.
+      useStore(found.store);
       setCatalog(found);
-      if (found.entries.length === 0) {
-        setError('No report found. A deployment needs data/index.json, or a single data/report.json.');
-        return;
-      }
       // The first render has to match the server's, so the URL is read after
       // mounting rather than during it, and replaces that entry instead of
       // adding one — arriving on a link should not take two backs to leave.
-      const fallback = found.default ?? found.entries[0]!.repo;
-      const fromUrl = parsePath(window.location.pathname, fallback);
-      const known = found.entries.some((e) => e.repo === fromUrl.repo);
-      const resolved = known ? fromUrl : { ...fromUrl, repo: fallback };
+      //
+      // An address always wins. The manifest says what to open with, not what
+      // is allowed: a repository nobody listed is still a repository, and
+      // bouncing someone back to a default would make most addresses lies.
+      const fromUrl = parsePath(window.location.pathname, '');
+      const resolved = fromUrl.repo
+        ? fromUrl
+        : { ...fromUrl, repo: found.default ?? '' };
       setView(resolved);
-      window.history.replaceState(resolved, '', toPath(resolved));
+      if (resolved.repo) window.history.replaceState(resolved, '', toPath(resolved));
     });
 
     const onPop = () => setView((current) => parsePath(window.location.pathname, current.repo));
@@ -89,7 +92,10 @@ export function Explorer() {
       .then((found) => {
         if (!live) return;
         if (!found) {
-          throw new Error(`Nothing exported for ${source} yet.`);
+          throw new Error(
+            `Nothing has been exported for ${source}. ` +
+              `Run \`cqx export\` against it, or open one this deployment lists.`,
+          );
         }
         setIndex(found);
       })
@@ -109,7 +115,10 @@ export function Explorer() {
       .then((found) => {
         if (!live) return;
         if (!found) {
-          throw new Error(`No dataset for ${source} at ${at}.`);
+          throw new Error(
+            `${source} has a timeline, but no dataset at ${at}. ` +
+              `That commit is outside what has been exported.`,
+          );
         }
         setData(found);
       })
@@ -170,14 +179,6 @@ export function Explorer() {
       </div>
     ) : null;
 
-  if (error) {
-    return (
-      <div className="wrap" style={{ paddingBlock: 40 }}>
-        <div className="empty">Could not load the dataset: {error}</div>
-      </div>
-    );
-  }
-
   return (
     <>
       <header>
@@ -232,7 +233,14 @@ export function Explorer() {
         </div>
 
         <main>
-          {!data ? (
+          {error ? (
+            <div className="empty">{error}</div>
+          ) : !source ? (
+            <div className="empty">
+              Nothing to open. This deployment lists no repository, so name one
+              in the address — <code>/{'{owner}'}/{'{repo}'}</code>.
+            </div>
+          ) : !data ? (
             <div className="empty">Loading {source}{at ? ` at ${at}` : ''}…</div>
           ) : (
             <>

@@ -13,9 +13,17 @@ export interface Catalog {
   entries: { repo: string }[];
   /** Which to open with; the first entry when unstated. */
   default: string | null;
+  /**
+   * Datasets this deployment serves itself, as a base path — what
+   * `cqx export --out public/data` produces. Absent means it serves none, and
+   * the shared store answers for everything. A deployment with no manifest at
+   * all is a different case: nothing has said either way, so `data/` is tried.
+   */
+  store: string | null;
 }
 
-const EMPTY: Catalog = { entries: [], default: null };
+/** No manifest: nothing has been declared, so look locally before giving up. */
+const UNDECLARED: Catalog = { entries: [], default: null, store: '/data' };
 
 export async function loadCatalog(): Promise<Catalog> {
   try {
@@ -23,13 +31,16 @@ export async function loadCatalog(): Promise<Catalog> {
     // An unmatched path is answered with the page itself, so a missing manifest
     // is 200 with HTML. Content type is what tells the difference.
     if (!response.ok || !(response.headers.get('content-type') ?? '').includes('json')) {
-      return EMPTY;
+      return UNDECLARED;
     }
     const raw = (await response.json()) as Partial<Catalog>;
     const entries = (raw.entries ?? []).filter((e) => e && typeof e.repo === 'string');
-    if (entries.length === 0) return EMPTY;
-    return { entries, default: raw.default ?? entries[0]!.repo };
+    return {
+      entries,
+      default: raw.default ?? entries[0]?.repo ?? null,
+      store: raw.store ?? null,
+    };
   } catch {
-    return EMPTY;
+    return UNDECLARED;
   }
 }
