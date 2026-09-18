@@ -16,6 +16,18 @@ interface Exports {
   cqx_facts(): number;
   cqx_score(ptr: number, len: number): number;
   cqx_dataset(r: number, rl: number, c: number, cl: number): number;
+  // Reading a workspace in pieces. What the coordinator calls:
+  cqx_manifests(): number;
+  cqx_merge_reset(): void;
+  cqx_merge_add(ptr: number, len: number): number;
+  cqx_merge_done(): number;
+  cqx_fold_reset(): void;
+  cqx_fold_add(ptr: number, len: number): number;
+  cqx_fold_done(r: number, rl: number, c: number, cl: number): number;
+  // And what a reader calls:
+  cqx_gather(ptr: number, len: number): number;
+  cqx_emit(ptr: number, len: number): number;
+  cqx_quote(ptr: number, len: number): number;
 }
 
 const encoder = new TextEncoder();
@@ -48,20 +60,32 @@ export class Analysis {
    */
   private static compiled: Promise<WebAssembly.Module> | null = null;
 
-  static async load(
-    url: string,
-    watch: Watch = { total: () => {}, one: () => {} },
-  ): Promise<Analysis> {
+  /**
+   * Start fetching and compiling, without wanting an instance yet.
+   *
+   * Two megabytes to download and compile, and none of it depends on which
+   * repository is about to be read — so it can overlap the request that finds
+   * that out.
+   */
+  static warm(url: string): Promise<WebAssembly.Module> {
     // Streaming compilation starts before the download finishes, which matters
     // for a two-megabyte module on a slow connection.
     Analysis.compiled ??= WebAssembly.compileStreaming(fetch(url)).catch(async () =>
       WebAssembly.compile(await (await fetch(url)).arrayBuffer()),
     );
+    return Analysis.compiled;
+  }
+
+  static async load(
+    url: string,
+    watch: Watch = { total: () => {}, one: () => {} },
+  ): Promise<Analysis> {
+    const module = await Analysis.warm(url);
     // The module cannot report progress on its own — it holds the thread until
     // it returns — so it is given something to call. Without this it will not
     // instantiate at all, which is the point: a module that silently reported
     // nothing would be worse.
-    const instance = await WebAssembly.instantiate(await Analysis.compiled, {
+    const instance = await WebAssembly.instantiate(module, {
       cqx: { parsing_total: watch.total, parsed_one: watch.one },
     });
     return new Analysis(instance.exports as unknown as Exports);
@@ -122,6 +146,17 @@ export class Analysis {
     }
   }
 
+  /**
+   * How much linear memory this instance has taken, in bytes.
+   *
+   * The number that matters on wasm32: the address space stops at four
+   * gigabytes and memory never shrinks, so this only ever goes up and what it
+   * reaches is what decides whether a repository can be read at all.
+   */
+  get held(): number {
+    return this.ex.memory.buffer.byteLength;
+  }
+
   get fileCount(): number {
     return this.ex.cqx_file_count();
   }
@@ -137,6 +172,135 @@ export class Analysis {
       ? this.withString(config, (p, l) => this.take(this.ex.cqx_score(p, l)))
       : this.take(this.ex.cqx_score(0, 0));
     return JSON.parse(reply);
+  }
+
+  /** Copies bytes into the module and returns where they landed. */
+  private putBytes(bytes: Uint8Array): [number, number] {
+    const ptr = this.ex.cqx_alloc(bytes.length);
+    if (ptr === 0 && bytes.length > 0) {
+      throw new Error('cqx ran out of memory: this repository is too large to analyse here.');
+    }
+    new Uint8Array(this.ex.memory.buffer).set(bytes, ptr);
+    return [ptr, bytes.length];
+  }
+
+  /**
+   * A reply taken as bytes rather than as text.
+   *
+   * makepad's readers write ninety-six megabytes of facts between them, and
+   * that text has no reason to exist as a JavaScript string: it is decoded
+   * here, cloned across a postMessage, and encoded again on the other side, to
+   * arrive as the bytes it already was. Kept as bytes it is one copy out of the
+   * module and then a transfer, which moves the buffer rather than copying it.
+   */
+  private takeBytes(ptr: number): Uint8Array {
+    const size = this.ex.memory.buffer.byteLength;
+    if (ptr === 0 || ptr + 4 > size) {
+      throw new Error('cqx returned nothing: it ran out of memory part way through.');
+    }
+    const len = new DataView(this.ex.memory.buffer).getUint32(ptr, true);
+    if (ptr + 4 + len > size) {
+      throw new Error('cqx returned a reply longer than its own memory; it ran out part way through.');
+    }
+    const out = new Uint8Array(len);
+    out.set(new Uint8Array(this.ex.memory.buffer, ptr + 4, len));
+    this.ex.cqx_free(ptr, 4 + len);
+    return out;
+  }
+
+  // --- reading a workspace in pieces ----------------------------------------
+  //
+  // Three phases, because what the reading is resolved against does not divide
+  // the way the reading does. The coordinator reads the manifests and merges;
+  // the readers parse, emit, and answer for the source they hold.
+
+  /** What the workspace contains, read from the manifests alone. */
+  manifests(): string {
+    return this.take(this.ex.cqx_manifests());
+  }
+
+  /**
+   * Parses this reader's slice and reports what it found beyond each file.
+   *
+   * Bytes both ways, like the facts. What a reader found in makepad is tens of
+   * megabytes of JSON, and a string would be decoded out of the module here,
+   * cloned across a postMessage, and encoded back in on the other side — three
+   * passes over it to deliver the bytes it already was. Fourteen of makepad's
+   * thirty-three seconds were spent on exactly that.
+   */
+  gather(metadata: string): Uint8Array {
+    return this.withString(metadata, (p, l) => this.takeBytes(this.ex.cqx_gather(p, l)));
+  }
+
+  /** Writes down what this reader holds, resolved against what all of them found. */
+  emit(shared: Uint8Array): Uint8Array {
+    const [ptr, len] = this.putBytes(shared);
+    try {
+      return this.takeBytes(this.ex.cqx_emit(ptr, len));
+    } finally {
+      this.ex.cqx_free(ptr, len);
+    }
+  }
+
+  /**
+   * Fills in the source line of every finding whose file this reader holds.
+   *
+   * The report goes round the readers in turn: one holds a slice of the
+   * sources and the coordinator holds none of them.
+   */
+  quote(report: string): string {
+    return this.withString(report, (p, l) => this.take(this.ex.cqx_quote(p, l)));
+  }
+
+  /** Starts a fresh union of what the readers found. */
+  mergeReset(): void {
+    this.ex.cqx_merge_reset();
+  }
+
+  /** Adds one reader's report. Call order is reading order: later wins. */
+  mergeAdd(shared: Uint8Array): void {
+    const [ptr, len] = this.putBytes(shared);
+    try {
+      const trouble = (JSON.parse(this.take(this.ex.cqx_merge_add(ptr, len))) as { error?: string })
+        .error;
+      if (trouble) throw new Error(trouble);
+    } finally {
+      this.ex.cqx_free(ptr, len);
+    }
+  }
+
+  /** Follows the union to its conclusion. */
+  mergeDone(): Uint8Array {
+    return this.takeBytes(this.ex.cqx_merge_done());
+  }
+
+  /** Starts a fresh collection of facts. */
+  foldReset(): void {
+    this.ex.cqx_fold_reset();
+  }
+
+  /** Adds one reader's facts, as the bytes they arrived as. */
+  foldAdd(facts: Uint8Array): void {
+    const [ptr, len] = this.putBytes(facts);
+    try {
+      const reply = this.take(this.ex.cqx_fold_add(ptr, len));
+      const trouble = (JSON.parse(reply) as { error?: string }).error;
+      if (trouble) throw new Error(trouble);
+    } finally {
+      this.ex.cqx_free(ptr, len);
+    }
+  }
+
+  /** Turns everything the readers wrote into one dataset. */
+  foldDone(repo: string, config = ''): { json: string; ms: number } {
+    const [rp, rl] = this.put(repo);
+    const [cp, cl] = this.put(config);
+    const started = performance.now();
+    const json = this.take(this.ex.cqx_fold_done(rp, rl, cp, cl));
+    const ms = Math.round(performance.now() - started);
+    this.ex.cqx_free(rp, rl);
+    this.ex.cqx_free(cp, cl);
+    return { json, ms };
   }
 
   /**

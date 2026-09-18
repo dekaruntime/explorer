@@ -107,7 +107,7 @@ export function Phases({ stage }: { stage: Stage }) {
               : `${stage.total} files`
         }
       />
-      <Analysis running={fetched} done={stage.done} total={stage.total} />
+      <Analysis running={fetched} done={stage.done} total={stage.total} note={stage.note} />
     </div>
   );
 }
@@ -117,21 +117,35 @@ export function Phases({ stage }: { stage: Stage }) {
  * function and calls it as each file is done. The clock stays, because over
  * two minutes a fraction alone is not much comfort.
  */
-function Analysis({ running, done, total }: { running: boolean; done: number; total: number }) {
+function Analysis({
+  running,
+  done,
+  total,
+  note,
+}: {
+  running: boolean;
+  done: number;
+  total: number;
+  note?: string;
+}) {
   const seconds = useElapsed(running);
   const counting = total > 0 && done > 0;
+  // Merging what the readers found, collecting what they wrote and scoring it
+  // are steps with no files to count through. A bar sitting full with nothing
+  // beside it looks stuck; saying which step it is does not.
+  const where = note
+    ? note
+    : counting
+      ? `${done.toLocaleString()} of ${total.toLocaleString()}`
+      : `${total.toLocaleString()} files`;
   return (
     <Phase
       label="running analysis"
       state={running ? 'running' : 'waiting'}
       // Known only once the first file is through; until then there is
       // genuinely nothing to report and the bar says so.
-      fraction={running && counting ? Math.min(1, done / total) : undefined}
-      detail={
-        running
-          ? `${counting ? `${done.toLocaleString()} of ${total.toLocaleString()}` : `${total.toLocaleString()} files`}${seconds > 2 ? ` · ${seconds}s` : ''}`
-          : undefined
-      }
+      fraction={running && counting && !note ? Math.min(1, done / total) : undefined}
+      detail={running ? `${where}${seconds > 2 ? ` · ${seconds}s` : ''}` : undefined}
     />
   );
 }
