@@ -9,6 +9,8 @@
     "build": "astro build",
     "preview": "npm run build && wrangler dev",
     "check": "astro check && tsc --noEmit",
+    "test": "node tests/rank.mjs",
+    "test:ui": "node tests/search.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

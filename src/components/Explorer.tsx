@@ -13,6 +13,7 @@ import { RepoInput } from './RepoInput';
 import { ThemePicker } from './ThemePicker';
 import { TimeMachine, type TimeMachineTab } from './TimeMachine';
 import { LevelView } from './LevelView';
+import { Search, SearchButton, useSearchKey } from './Search';
 import { Analysing, Working } from './Loading';
 
 const TIME_MACHINE_SLOTS = 20;
@@ -115,6 +116,8 @@ export function Explorer() {
   // of it at once and they have to stay in step.
   const [view, setView] = useState<View>(() => defaultView(''));
   const { repo: source, level, ref } = view;
+  const [searching, setSearching] = useState(false);
+  useSearchKey(() => setSearching(true));
 
   /** Changes the view and records it, so back returns here. */
   const go = (patch: Partial<View>) => {
@@ -123,7 +126,10 @@ export function Explorer() {
     // arrives — that is the swap worth softening.
     transition(() =>
       setView((current) => {
-        const next = { ...current, ...patch };
+        // Focus belongs to the thing that asked for it. Any other move — an
+        // elevation, a scope, a commit — leaves it behind, or a row stays
+        // pinned to the top of a list nobody searched.
+        const next = { ...current, focus: null, ...patch };
         if (sameView(current, next)) return current;
         window.history.pushState(next, '', toPath(next));
         // A different elevation or a different scope is a different view, and
@@ -158,7 +164,7 @@ export function Explorer() {
       // An address always wins. The manifest says what to open with, not what
       // is allowed: a repository nobody listed is still a repository, and
       // bouncing someone back to a default would make most addresses lies.
-      const fromUrl = parsePath(window.location.pathname, '');
+      const fromUrl = parsePath(window.location.pathname, window.location.hash, '');
       const resolved = fromUrl.repo
         ? fromUrl
         : { ...fromUrl, repo: found.default ?? '' };
@@ -166,7 +172,8 @@ export function Explorer() {
       if (resolved.repo) window.history.replaceState(resolved, '', toPath(resolved));
     });
 
-    const onPop = () => setView((current) => parsePath(window.location.pathname, current.repo));
+    const onPop = () =>
+      setView((current) => parsePath(window.location.pathname, window.location.hash, current.repo));
     window.addEventListener('popstate', onPop);
     return () => {
       live = false;
@@ -393,6 +400,12 @@ export function Explorer() {
 
   return (
     <>
+      <Search
+        data={data}
+        open={searching}
+        onClose={() => setSearching(false)}
+        onGo={go}
+      />
       <header>
         <div className="wrap hdr">
           {/* Whose deployment this is, if it said. The mark is deka's on
@@ -420,6 +433,9 @@ export function Explorer() {
             suggestions={catalog?.entries.map((e) => e.repo) ?? []}
             onOpen={(repo) => go({ repo, pkg: null, file: null, ref: null, level: 'L0' })}
           />
+          {/* Only once there is something to search. An empty palette over an
+              empty page is chrome pretending to be a feature. */}
+          {data ? <SearchButton onOpen={() => setSearching(true)} /> : null}
           {/* Always present, so the top of the page does not appear and
               disappear on every click. Zero is what is known so far. */}
           <span className="tot">
@@ -517,6 +533,7 @@ export function Explorer() {
                 viewing={commit}
                 at={shownAt}
                 scopeName={packageName}
+                focus={view.focus}
                 files={files}
                 types={types}
                 functions={functions}

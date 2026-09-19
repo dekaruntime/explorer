@@ -21,6 +21,16 @@ export interface View {
   pkg: string | null;
   /** File path relative to the repository. */
   file: string | null;
+  /**
+   * A symbol to bring to the top of the elevation, from the fragment.
+   *
+   * A fragment rather than another path segment, because that is exactly what
+   * a fragment is for: the path names the document and the fragment names a
+   * place inside it. It also keeps the path grammar intact — every prefix of
+   * one of these addresses is still a valid address, which would stop being
+   * true the moment a symbol name with a slash in it became a segment.
+   */
+  focus: string | null;
 }
 
 /** The word that names each elevation in a path. */
@@ -46,17 +56,20 @@ export const defaultView = (repo: string): View => ({
   level: 'L0',
   pkg: null,
   file: null,
+  focus: null,
 });
 
 /** Commit-ish: hex, long enough to mean something, never a keyword. */
 const looksLikeRef = (segment: string): boolean =>
   /^[0-9a-f]{7,40}$/.test(segment) && !(segment in LEVEL_OF);
 
-export function parsePath(pathname: string, fallbackRepo: string): View {
+export function parsePath(pathname: string, hash: string, fallbackRepo: string): View {
+  const focus = hash.replace(/^#/, '');
   const parts = pathname.split('/').filter(Boolean).map(decodeURIComponent);
   if (parts.length < 2) return defaultView(fallbackRepo);
 
   const view = defaultView(`${parts[0]}/${parts[1]}`);
+  if (focus) view.focus = decodeURIComponent(focus);
   let rest = parts.slice(2);
 
   if (rest.length > 0 && looksLikeRef(rest[0]!)) {
@@ -106,8 +119,14 @@ export function toPath(view: View): string {
     parts.push(WORD[view.level]);
   }
 
-  return '/' + parts.map((p) => p.split('/').map(encodeURIComponent).join('/')).join('/');
+  const path = '/' + parts.map((p) => p.split('/').map(encodeURIComponent).join('/')).join('/');
+  return view.focus ? `${path}#${encodeURIComponent(view.focus)}` : path;
 }
 
 export const sameView = (a: View, b: View): boolean =>
-  a.repo === b.repo && a.ref === b.ref && a.level === b.level && a.pkg === b.pkg && a.file === b.file;
+  a.repo === b.repo &&
+  a.ref === b.ref &&
+  a.level === b.level &&
+  a.pkg === b.pkg &&
+  a.file === b.file &&
+  a.focus === b.focus;

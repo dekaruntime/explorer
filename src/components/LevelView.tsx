@@ -25,6 +25,7 @@ export function LevelView({
   viewing,
   at,
   scopeName,
+  focus,
   files,
   types,
   functions,
@@ -38,6 +39,8 @@ export function LevelView({
   at: string | null;
   /** The package in scope, if one is. */
   scopeName: string | null;
+  /** A symbol search asked to be shown, if one did. */
+  focus: string | null;
   files: FileNode[];
   types: TypeDecl[];
   functions: FunctionDecl[];
@@ -81,11 +84,12 @@ export function LevelView({
         />
       );
     case 'L4':
-      return <TypesLevel types={types} />;
+      return <TypesLevel types={types} focus={focus} />;
     default:
       return (
         <FunctionsLevel
           functions={functions}
+          focus={focus}
           notable={data.totals.notable}
           total={data.totals.functions}
         />

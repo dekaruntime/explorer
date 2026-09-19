@@ -1,4 +1,5 @@
 import type { TypeDecl } from '../../lib/types';
+import { pinned } from '../../lib/focus';
 
 /**
  * Type declarations this repository owns.
@@ -8,8 +9,17 @@ import type { TypeDecl } from '../../lib/types';
  * repository declares, the ordering becomes informative — and it surfaces that
  * most declarations appear in no signature at all.
  */
-export function TypesLevel({ types, limit = 120 }: { types: TypeDecl[]; limit?: number }) {
-  const shown = types.slice(0, limit);
+export function TypesLevel({
+  types,
+  focus,
+  limit = 120,
+}: {
+  types: TypeDecl[];
+  focus: string | null;
+  limit?: number;
+}) {
+  const { list, marked } = pinned(types, focus);
+  const shown = list.slice(0, limit);
   return (
     <div>
       <h2>Types</h2>
@@ -27,7 +37,7 @@ export function TypesLevel({ types, limit = 120 }: { types: TypeDecl[]; limit?: 
               <tr><td colSpan={5} className="dim">No types in scope.</td></tr>
             ) : (
               shown.map((t) => (
-                <tr key={t.id}>
+                <tr key={t.id} className={marked.has(t) ? 'found' : undefined}>
                   <td><b>{t.name}</b></td>
                   <td className="dim">{t.k}</td>
                   <td className="acc">{t.pkg ?? ''}</td>

@@ -1,5 +1,6 @@
 import type { FunctionDecl, TypePart } from '../../lib/types';
 import { EFFECT_LABEL } from '../../lib/types';
+import { pinned } from '../../lib/focus';
 
 /**
  * One row per component of a type, with the crate that owns it.
@@ -26,16 +27,19 @@ function Annotation({ label, written, parts }: { label: string; written: string;
 
 export function FunctionsLevel({
   functions,
+  focus,
   notable,
   total,
   limit = 40,
 }: {
   functions: FunctionDecl[];
+  focus: string | null;
   notable: number;
   total: number;
   limit?: number;
 }) {
-  const shown = functions.slice(0, limit);
+  const { list, marked } = pinned(functions, focus);
+  const shown = list.slice(0, limit);
   return (
     <div>
       <h2>Functions</h2>
@@ -50,7 +54,7 @@ export function FunctionsLevel({
         shown.map((f) => {
           const params = f.p.map(([name, written]) => `${name}: ${written}`).join(', ');
           return (
-            <div className="sig" key={f.id}>
+            <div className={marked.has(f) ? 'sig found' : 'sig'} key={f.id}>
               <div className="hd">
                 <span className="fn">{f.name}</span>
                 <span className="bg">
