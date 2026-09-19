@@ -13,12 +13,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # 24, not 22: `tests/rank.mjs` imports the ranker straight from its
+          # TypeScript source, and Node strips the types itself from 23.6.
+          node-version: 24
           cache: npm
       - run: npm ci
       # Cloudflare Pages builds main on its own, so this exists to catch a break
       # on the pull request rather than after it has already deployed.
       - run: npm run check
+      # The ranker, on its own. `npm run test:ui` is not here on purpose: it
+      # drives a browser against a real repository over the network, which
+      # makes it a good test and a bad gate.
+      - run: npm test
       - run: npm run build
       - name: Report what would ship
         run: |
