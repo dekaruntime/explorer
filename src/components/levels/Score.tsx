@@ -1,5 +1,5 @@
-import type { Commit, Score } from "../../lib/types";
-import { band } from "../../lib/types";
+import type { Commit, Score } from "cqx-kit/engine";
+import { band } from "cqx-kit/engine";
 import { useEased } from "../../lib/animate";
 import { Finding } from "../Finding";
 

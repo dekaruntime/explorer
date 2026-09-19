@@ -20,7 +20,7 @@
  * immutable: once fetched it can be cached forever and never revalidated.
  */
 
-import type { Commit, Dataset } from './types';
+import type { Commit, Dataset } from 'cqx-kit/engine';
 
 /** The shared store. A deployment overrides it; an empty value disables it. */
 export const STORE: string = (

@@ -1,4 +1,4 @@
-import type { Finding as One } from '../lib/types';
+import type { Finding as One } from 'cqx-kit/engine';
 
 /**
  * One finding, shown the way a compiler shows one.

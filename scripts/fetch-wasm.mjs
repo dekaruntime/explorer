@@ -8,21 +8,24 @@
  *
  * Downloaded here instead of committed, because 2.4 MB of build output in a
  * source tree is 2.4 MB in every clone and every diff for the life of the
- * repository. The version is pinned in package.json and the bytes are checked
- * against the release's own SHA256SUMS, so a build is reproducible and a
- * substituted artefact fails loudly.
+ * repository. The bytes are checked against the release's own SHA256SUMS, so a
+ * build is reproducible and a substituted artefact fails loudly.
+ *
+ * Which version is `cqx-kit`'s to say. It was pinned here as well until the
+ * kit existed, and two places that must agree about a version are two places
+ * that can disagree about one — the shapes this page reads are the shapes that
+ * module writes, so whoever owns the shapes owns the module.
  */
 
+import { CQX_VERSION as version } from 'cqx-kit/engine';
+
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const target = join(root, 'public', 'cqx.wasm');
-
-const { cqx: version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-if (!version) throw new Error('package.json has no "cqx" version to fetch');
 
 const release = `https://github.com/samifouad/cqx/releases/download/${version}`;
 

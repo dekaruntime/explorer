@@ -1,4 +1,4 @@
-import type { EffectRow } from '../../lib/types';
+import type { EffectRow } from 'cqx-kit/engine';
 
 /**
  * What the binaries touch outside themselves.

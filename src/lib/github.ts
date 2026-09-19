@@ -13,6 +13,8 @@
  * bucket.
  */
 
+import { policy } from 'cqx-kit/engine';
+
 export interface SourceFile {
   path: string;
   /** The git object id of these contents, which is what makes caching work. */
@@ -108,17 +110,11 @@ export interface CommitRef {
 }
 
 /**
- * The one thing here that cannot be cached forever.
- *
- * Everything else is addressed by a commit or a blob and so can never go stale,
- * but a repository grows new commits, and a timeline that hid one would be
- * worse than a request. A minute is short enough that nobody notices and long
- * enough that reloading a page repeatedly — the common case while reading —
- * costs nothing.
+ * The one thing here that cannot be cached forever. How long for is
+ * `policy.freshFor`, which says why a minute.
  */
 const TIMELINES = 'cqx-timelines-v1';
 const RELEASES = 'cqx-releases-v1';
-const FRESH_FOR = 60_000;
 
 interface Held<T> {
   at: number;
@@ -152,7 +148,7 @@ async function cachedList<T>(
     const hit = await cache?.match(key);
     if (hit) {
       const held = (await hit.json()) as Held<T>;
-      if (Date.now() - held.at < FRESH_FOR && held.items.length >= count) {
+      if (Date.now() - held.at < policy.freshFor && held.items.length >= count) {
         return held.items.slice(0, count);
       }
       stale = held;
@@ -320,16 +316,16 @@ async function openCache(): Promise<Cache | null> {
 }
 
 /**
- * `lanes` is how many requests are in flight at once. Twelve saturates an
- * HTTP/2 connection to the CDN — measured at 13.4 MB/s against 7.8 at
- * twenty-four — and that is a property of the connection, not of the caller,
- * so several readers sharing it take a share each rather than twelve apiece.
+ * `lanes` is how many requests are in flight at once — `policy.lanes` by
+ * default, which says why twelve. It is a property of the connection rather
+ * than of the caller, so several readers sharing one take a share each rather
+ * than twelve apiece, which is why it is a parameter at all.
  */
 export async function fetchSource(
   repo: string,
   tree: Tree,
   onProgress?: (p: Progress) => void,
-  lanes = 12,
+  lanes = policy.lanes,
 ): Promise<SourceFile[]> {
   const cache = await openCache();
   const files: SourceFile[] = [];

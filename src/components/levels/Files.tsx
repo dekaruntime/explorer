@@ -1,4 +1,4 @@
-import type { FileNode } from '../../lib/types';
+import type { FileNode } from 'cqx-kit/engine';
 import { EffectBadges } from '../EffectBadges';
 
 export function FilesLevel({

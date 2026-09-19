@@ -1,4 +1,4 @@
-import type { Dataset } from './types';
+import type { Dataset } from 'cqx-kit/engine';
 import type { View } from './view';
 
 /**

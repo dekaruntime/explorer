@@ -1,4 +1,4 @@
-import type { Package } from '../../lib/types';
+import type { Package } from 'cqx-kit/engine';
 import { EffectBadges } from '../EffectBadges';
 
 export function PackagesLevel({

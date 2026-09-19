@@ -22,6 +22,7 @@
  * a commit and a commit does not change, so it can never be stale.
  */
 
+import { policy } from 'cqx-kit/engine';
 import { Analysis } from './cqx';
 import { fetchSource, fetchTree, type SourceFile, type Tree, type TreeEntry } from './github';
 import type { ReaderIn, ReaderOut } from './read.worker';
@@ -122,23 +123,15 @@ interface Measured {
 }
 
 /**
- * Where one thread stops being enough.
- *
- * Below this a single reader finishes in about a second and the second thread
- * would spend longer starting than it saved: four instances of a two-megabyte
- * module, a round trip to the page for the threads, and a merge over facts that
- * would not have needed merging. deka is three hundred files and takes 0.7s.
- * makepad is six thousand and takes over two minutes.
- */
-const DIVIDE_ABOVE = 1200;
-
-/**
  * How many readers, given the machine.
  *
  * Bounded by cores, because more readers than cores is the same work with more
  * overhead, and bounded by memory, because the readers' peaks are concurrent:
  * makepad's four readers hold about 700 MB each. A machine that reports four
  * gigabytes gets two of them rather than an out-of-memory error.
+ *
+ * The ceiling itself is `policy.readers` — a decision, argued once, that the
+ * kit carries so cqx.bio cannot quietly disagree with this file about it.
  */
 function howMany(sources: number): number {
   const nav = navigator as Navigator & { deviceMemory?: number };
@@ -146,15 +139,10 @@ function howMany(sources: number): number {
   // Browsers round this down and stop reporting at eight, so eight means
   // "eight or more" and four means "four, or a browser being coy".
   const gb = nav.deviceMemory ?? 8;
-  const byMemory = gb <= 2 ? 2 : gb <= 4 ? 3 : 4;
+  const byMemory = gb <= 2 ? 2 : gb <= 4 ? 3 : policy.readers;
   // One file per reader is not a division of labour.
   const useful = Math.max(1, Math.floor(sources / 400));
-  // Four, and not more. Eight readers finish makepad in 10.8 seconds against
-  // four readers' 11.6, which is not worth four more threads: the parse stopped
-  // dividing cleanly well before the thread count ran out. Where eight does win
-  // is memory — 583 MB against 860 — and at 860 there is no longer a ceiling
-  // worth buying headroom against.
-  return Math.max(2, Math.min(byMemory, cores - 1, useful));
+  return Math.max(2, Math.min(byMemory, policy.readers, cores - 1, useful));
 }
 
 /** Contiguous slices, so that merging them in order is reading in order. */
@@ -493,7 +481,7 @@ async function run(ask: Request) {
   }
 
   const sources = tree.files.filter((f) => f.path.endsWith('.rs')).length;
-  const ways = ask.readers ?? (sources > DIVIDE_ABOVE ? howMany(sources) : 1);
+  const ways = ask.readers ?? (sources > policy.divideAbove ? howMany(sources) : 1);
   const out =
     ways > 1 ? await inPieces(repo, tree, wasm, ways, began) : await whole(repo, tree, wasm, began);
 

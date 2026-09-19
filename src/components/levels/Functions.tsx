@@ -1,5 +1,5 @@
-import type { FunctionDecl, TypePart } from '../../lib/types';
-import { EFFECT_LABEL } from '../../lib/types';
+import type { FunctionDecl, TypePart } from 'cqx-kit/engine';
+import { EFFECT_LABEL } from 'cqx-kit/engine';
 import { pinned } from '../../lib/focus';
 
 /**

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Dataset } from '../lib/types';
+import type { Dataset } from 'cqx-kit/engine';
 import type { View } from '../lib/view';
 import { buildIndex, search, KIND_LABEL, KIND_ORDER, type Hit } from '../lib/search';
 

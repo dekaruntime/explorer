@@ -1,4 +1,4 @@
-import type { Commit } from '../lib/types';
+import type { Commit } from 'cqx-kit/engine';
 import type { ReleaseRef } from '../lib/github';
 
 const when = (iso: string): string => {

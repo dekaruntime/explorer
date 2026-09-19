@@ -1,4 +1,4 @@
-import type { TypeDecl } from '../../lib/types';
+import type { TypeDecl } from 'cqx-kit/engine';
 import { pinned } from '../../lib/focus';
 
 /**

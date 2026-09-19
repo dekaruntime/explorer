@@ -1,5 +1,5 @@
-import type { EffectKind } from '../lib/types';
-import { EFFECT_LABEL, EFFECT_ORDER } from '../lib/types';
+import type { EffectKind } from 'cqx-kit/engine';
+import { EFFECT_LABEL, EFFECT_ORDER } from 'cqx-kit/engine';
 
 /**
  * Effects a node carries, dangerous ones first.

@@ -22,7 +22,7 @@
 
 import { fetchCommits } from './github';
 import type { Reply, Request } from './analyse.worker';
-import type { Commit, Dataset } from './types';
+import type { Commit, Dataset } from 'cqx-kit/engine';
 import type { RepoIndex } from './store';
 
 /** How many commits the rail offers for a repository being analysed here. */

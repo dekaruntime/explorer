@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { Commit, Dataset } from '../lib/types';
+import { policy, type Commit, type Dataset } from 'cqx-kit/engine';
 import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
 import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
 import { liveDataset, liveIndex, type Stage } from '../lib/live';
@@ -15,10 +15,6 @@ import { TimeMachine, type TimeMachineTab } from './TimeMachine';
 import { LevelView } from './LevelView';
 import { Search, SearchButton, useSearchKey } from './Search';
 import { Analysing, Working } from './Loading';
-
-const TIME_MACHINE_SLOTS = 20;
-/** The last N releases a time machine offers. */
-const RELEASE_SLOTS = 20;
 
 /**
  * Milliseconds as seconds, to one place — except below a tenth, where one
@@ -211,7 +207,7 @@ export function Explorer() {
     // idea what its tags are, and an unpublished one is worth listing releases
     // for before anything has been analysed. A repository with no releases —
     // most of them — answers with an empty list, not an error.
-    fetchReleases(source, RELEASE_SLOTS)
+    fetchReleases(source, policy.releases)
       .then((list) => { if (live) setReleases({ of: source, list }); })
       // A refused request is not an absence of releases, and saying so would
       // be telling the reader something untrue about their repository.
@@ -235,9 +231,9 @@ export function Explorer() {
   // those open instantly and the others are read here.
   const [extra, setExtra] = useState<{ of: string; commits: Commit[] } | null>(null);
   useEffect(() => {
-    if (!source || published.length === 0 || published.length >= TIME_MACHINE_SLOTS) return;
+    if (!source || published.length === 0 || published.length >= policy.commits) return;
     let live = true;
-    fetchCommits(source, TIME_MACHINE_SLOTS)
+    fetchCommits(source, policy.commits)
       .then((found) => {
         if (!live) return;
         setExtra({
@@ -349,7 +345,7 @@ export function Explorer() {
   // answer is known to be empty does the fallback to commits apply — and only
   // until the reader picks a tab themselves, which is remembered from there.
   const effectiveTab: TimeMachineTab =
-    tab ?? (releaseList && releaseList.length === 0 ? 'commits' : 'releases');
+    tab ?? (releaseList && releaseList.length === 0 ? 'commits' : policy.opensAt === 'release' ? 'releases' : 'commits');
 
   const packageName = view.pkg;
   const packageId =
@@ -493,7 +489,7 @@ export function Explorer() {
             trouble={timelineTrouble}
             // Only as many as there are. An empty slot means "still arriving",
             // and nothing is arriving for a commit nobody has heard of.
-            slots={error ? 0 : Math.min(TIME_MACHINE_SLOTS, Math.max(timeline.length, 1))}
+            slots={error ? 0 : Math.min(policy.commits, Math.max(timeline.length, 1))}
             active={ref}
             tab={effectiveTab}
             onTabChange={setTab}
