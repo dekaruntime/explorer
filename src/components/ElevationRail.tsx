@@ -1,4 +1,4 @@
-import type { LevelId } from '../lib/view';
+import type { LevelId } from 'cqx-kit/engine';
 
 export interface Elevation {
   id: LevelId;

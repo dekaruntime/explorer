@@ -1,5 +1,5 @@
 import type { Commit } from 'cqx-kit/engine';
-import type { ReleaseRef } from '../lib/github';
+import type { ReleaseRef } from 'cqx-kit/engine';
 
 const when = (iso: string): string => {
   const d = new Date(iso);

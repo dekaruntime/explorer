@@ -1,13 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { policy, type Commit, type Dataset } from 'cqx-kit/engine';
-import { loadCatalog, type Brand, type Catalog } from '../lib/catalog';
-import { loadDataset, loadIndex, useStore, type RepoIndex } from '../lib/store';
-import { liveDataset, liveIndex, type Stage } from '../lib/live';
-import { fetchCommits } from '../lib/github';
-import { fetchReleases, type ReleaseRef } from '../lib/github';
-import { defaultView, parsePath, sameView, toPath, type LevelId, type View } from '../lib/view';
+import {
+  policy,
+  type Commit,
+  type Dataset,
+  loadCatalog,
+  type Brand,
+  type Catalog,
+  loadDataset,
+  loadIndex,
+  useStore,
+  type RepoIndex,
+  liveDataset,
+  liveIndex,
+  type Stage,
+  fetchCommits,
+  fetchReleases,
+  type ReleaseRef,
+  defaultView,
+  parsePath,
+  sameView,
+  toPath,
+  type LevelId,
+  type View,
+} from 'cqx-kit/engine';
 import { transition } from '../lib/transition';
+import { installHost } from '../lib/host';
 import { ElevationRail, type Elevation } from './ElevationRail';
 import { RepoInput } from './RepoInput';
 import { ThemePicker } from './ThemePicker';
@@ -146,6 +164,10 @@ export function Explorer() {
 
   useEffect(() => {
     let live = true;
+    // Before anything asks the engine for anything. Here rather than at module
+    // scope because it reads `location`, and this component is rendered on the
+    // server too — where there is none.
+    installHost();
     // What exists comes from the deployment, not from this file.
     loadCatalog().then((found) => {
       if (!live) return;

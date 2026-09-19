@@ -1,5 +1,5 @@
 import type { Commit, Dataset, FileNode, FunctionDecl, TypeDecl } from 'cqx-kit/engine';
-import type { LevelId, View } from '../lib/view';
+import type { LevelId, View } from 'cqx-kit/engine';
 import { ScoreLevel } from './levels/Score';
 import { SystemLevel } from './levels/System';
 import { PackagesLevel } from './levels/Packages';

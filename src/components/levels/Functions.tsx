@@ -1,6 +1,6 @@
 import type { FunctionDecl, TypePart } from 'cqx-kit/engine';
 import { EFFECT_LABEL } from 'cqx-kit/engine';
-import { pinned } from '../../lib/focus';
+import { pinned } from 'cqx-kit/engine';
 
 /**
  * One row per component of a type, with the crate that owns it.

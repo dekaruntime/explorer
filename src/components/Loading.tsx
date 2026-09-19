@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { Stage } from '../lib/live';
+import type { Stage } from 'cqx-kit/engine';
 
 /**
  * Seconds since a phase began.

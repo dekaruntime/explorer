@@ -9,14 +9,13 @@
     "build": "astro build",
     "preview": "npm run build && wrangler dev",
     "check": "astro check && tsc --noEmit",
-    "test": "node tests/rank.mjs",
-    "test:ui": "node tests/search.mjs",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "test": "node tests/search.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^4.2.0",
     "astro": "^5.2.0",
-    "cqx-kit": "^0.0.1",
+    "cqx-kit": "^0.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

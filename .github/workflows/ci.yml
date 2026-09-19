@@ -21,10 +21,9 @@ jobs:
       # Cloudflare Pages builds main on its own, so this exists to catch a break
       # on the pull request rather than after it has already deployed.
       - run: npm run check
-      # The ranker, on its own. `npm run test:ui` is not here on purpose: it
-      # drives a browser against a real repository over the network, which
-      # makes it a good test and a bad gate.
-      - run: npm test
+      # No test step: the only one left here drives a browser against a real
+      # repository over the network, which makes it a good test and a bad
+      # gate. The ranker it used to run moved to cqx-kit, which gates it.
       - run: npm run build
       - name: Report what would ship
         run: |

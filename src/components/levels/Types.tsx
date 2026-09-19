@@ -1,5 +1,5 @@
 import type { TypeDecl } from 'cqx-kit/engine';
-import { pinned } from '../../lib/focus';
+import { pinned } from 'cqx-kit/engine';
 
 /**
  * Type declarations this repository owns.
