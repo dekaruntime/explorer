@@ -79,6 +79,75 @@ function BrandMark({ brand, onHome }: { brand: Brand; onHome: (() => void) | nul
 }
 
 /**
+ * Where you are, and every way back to somewhere else.
+ *
+ * The scope used to be a sentence with one button after it, and the button
+ * did the only thing the sentence could not say: clear. But every part of a
+ * scope is an address the explorer already knows how to render — the
+ * repository is its crates, a crate is its files, a file is its types — so
+ * each part is a link, and "clear" is simply what the first one does.
+ *
+ * A crumb that would land you where you already are is not a link. That is
+ * the file, usually, since the scope bar is only drawn once there is one; at
+ * Functions it becomes a link again, back up to that file's types.
+ */
+function Scope({
+  view,
+  onGo,
+}: {
+  view: View;
+  onGo: (patch: Partial<View>) => void;
+}) {
+  const crumbs: { label: string; dir?: string; patch: Partial<View> }[] = [
+    { label: view.repo, patch: { pkg: null, file: null, level: 'L2' } },
+  ];
+  if (view.pkg) {
+    crumbs.push({ label: view.pkg, patch: { pkg: view.pkg, file: null, level: 'L3' } });
+  }
+  if (view.file) {
+    // The directories are context and the file is the thing, so they are
+    // shown as one crumb and weighted differently. There is no crumb for a
+    // directory because there is no view of one — scope is a crate and a
+    // file, and inventing a level here would be inventing a lie.
+    const cut = view.file.lastIndexOf('/');
+    crumbs.push({
+      label: cut < 0 ? view.file : view.file.slice(cut + 1),
+      dir: cut < 0 ? undefined : view.file.slice(0, cut + 1),
+      patch: { file: view.file, level: 'L4' },
+    });
+  }
+
+  return (
+    <nav className="scope" aria-label="Scope">
+      {crumbs.map((crumb, i) => {
+        // Compared against what `go` would actually produce, focus and all —
+        // otherwise a crumb reads as current while clicking it would still
+        // drop the symbol search had pinned.
+        const here = sameView(view, { ...view, focus: null, ...crumb.patch });
+        const inner = (
+          <>
+            {crumb.dir ? <em>{crumb.dir}</em> : null}
+            {crumb.label}
+          </>
+        );
+        return (
+          <span key={i}>
+            {i > 0 ? <i aria-hidden="true">/</i> : null}
+            {here ? (
+              <b aria-current="page">{inner}</b>
+            ) : (
+              <button type="button" onClick={() => onGo(crumb.patch)}>
+                {inner}
+              </button>
+            )}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
+/**
  * The explorer.
  *
  * Scope persists downward: choosing a crate at L2 filters Files, Types and
@@ -430,14 +499,7 @@ export function Explorer() {
     { id: 'L5', name: 'Functions', count: (data ? data.totals.functions : 0).toLocaleString() },
   ];
 
-  const scopeBar =
-    data && (pkg || file) ? (
-      <div className="scope">
-        scope: {packageName ? <b>{packageName}</b> : null}
-        {file ? <> / <b>{filePath}</b></> : null}
-        <button onClick={() => go({ pkg: null, file: null, level: 'L2' })}>clear</button>
-      </div>
-    ) : null;
+  const scopeBar = data && (pkg || file) ? <Scope view={view} onGo={go} /> : null;
 
   return (
     <>

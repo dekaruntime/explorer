@@ -24,7 +24,11 @@
     // single-page fallback means every path matches an asset — so /gh/ was
     // answered with the page, and the three routes that exist to save requests
     // quietly returned HTML.
-    "run_worker_first": ["/gh/*"]
+    // Both spellings. `/gh/*` does not match the bare `/gh`, which then went
+    // to the asset handler — and that refuses anything but GET, so the
+    // reader's probe got a 405 from a server that was not the one being
+    // asked.
+    "run_worker_first": ["/gh", "/gh/*"]
   },
 
   // The same bucket the datasets live in, so what is learned about a
