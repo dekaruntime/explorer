@@ -3,7 +3,7 @@
   // dashboard, so a build is reproducible from a checkout and a change to it
   // arrives as a reviewable diff.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cqx-web",
+  "name": "deka-explorer",
   "compatibility_date": "2026-09-18",
 
   // One server, for one thing. Three calls to GitHub are metered and the rest
