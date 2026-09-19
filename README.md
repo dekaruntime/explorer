@@ -1,9 +1,9 @@
 # deka explorer
 
-The web explorer for [cqx](https://github.com/samifouad/cqx): a CodeQuality Score
+The web explorer that uses [cqx](https://github.com/samifouad/cqx) to generate a CodeQuality Score
 and a navigable map of a codebase.
 
-Astro with React islands and TypeScript. Static output — the whole site is a few
+Stack: Astro with React islands and TypeScript. Static output — the whole site is a few
 files on a CDN, and the analysis runs in the visitor's browser rather than on a
 server.
 
