@@ -1,6 +1,6 @@
 ---
 import '../styles/theme.css';
-import { Explorer } from '../components/Explorer';
+import { DekaExplorer } from '../lib/explorer';
 
 // The dataset is fetched rather than inlined. Inlining it put 890KB of JSON
 // into the document; as an asset it is cached separately, and it is the same
@@ -33,6 +33,6 @@ import { Explorer } from '../components/Explorer';
         if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
       } catch (e) {}
     </script>
-    <Explorer client:load />
+    <DekaExplorer client:load />
   </body>
 </html>

@@ -34,46 +34,46 @@ await page.goto(`${BASE}/${REPO}`, { waitUntil: 'domcontentloaded' });
 // minutes because a repository the store has no CORS grant for — localhost,
 // normally — is read and analysed in the browser instead.
 await page.waitForFunction(
-  () => (document.querySelector('.tot b')?.textContent ?? '0') !== '0',
+  () => (document.querySelector('[data-cqx=totals] b')?.textContent ?? '0') !== '0',
   null,
   { timeout: 180_000 },
 );
-ok(`loaded — ${(await page.locator('.tot').innerText()).replace(/\s+/g, ' ')}`);
+ok(`loaded — ${(await page.locator('[data-cqx=totals]').innerText()).replace(/\s+/g, ' ')}`);
 
-if ((await page.locator('.sbtn').count()) !== 1) fail('no search button after load');
+if ((await page.locator('button[aria-label="Search this repository"]').count()) !== 1) fail('no search button after load');
 else ok('search button present');
 
 await page.keyboard.press('ControlOrMeta+k');
-await page.waitForSelector('.palette', { timeout: 3000 });
+await page.waitForSelector('[role=dialog]', { timeout: 3000 });
 ok('meta+k opened the palette');
 
 // Before anything is typed: a starting point rather than a blank box.
-const opening = await page.locator('.phit').count();
+const opening = await page.locator('[role=option]').count();
 if (opening === 0) fail('empty palette shows nothing');
 else ok(`empty palette offers ${opening} starting points`);
-ok('counts: ' + (await page.locator('.pfoot .cts').innerText()).replace(/\s+/g, ' '));
+ok('counts: ' + (await page.locator('[data-cqx=counts]').innerText()).replace(/\s+/g, ' '));
 
 // A name this dataset really contains, taken from a row the palette drew.
 const target = await page.evaluate(() => {
-  const rows = [...document.querySelectorAll('.phit')];
-  const row = rows.find((r) => r.querySelector('.sk')?.textContent === 'type') ?? rows[0];
-  return row?.querySelector('.nm')?.textContent ?? null;
+  const rows = [...document.querySelectorAll('[role=option]')];
+  const row = rows.find((r) => r.querySelector('[data-cqx=hit-kind]')?.textContent === 'type') ?? rows[0];
+  return row?.querySelector('[data-cqx=hit-name]')?.textContent ?? null;
 });
 if (!target) { fail('could not read a name out of the palette'); }
 else ok(`working with "${target}"`);
 
 // Typed in full, it is the exact match, and an exact match leads.
-await page.fill('.pq input', target);
+await page.fill('[role=combobox]', target);
 await page.waitForTimeout(150);
-let hits = await page.locator('.phit .nm').allInnerTexts();
+let hits = await page.locator('[data-cqx=hit-name]').allInnerTexts();
 if (hits[0] !== target) fail(`exact match did not lead: got "${hits[0]}"`);
 else ok(`exact match leads (${hits.length} hits)`);
 
 // Typed as a prefix, it is still there.
 const prefix = target.slice(0, Math.max(3, Math.min(6, target.length - 1)));
-await page.fill('.pq input', prefix);
+await page.fill('[role=combobox]', prefix);
 await page.waitForTimeout(150);
-hits = await page.locator('.phit .nm').allInnerTexts();
+hits = await page.locator('[data-cqx=hit-name]').allInnerTexts();
 if (!hits.includes(target)) fail(`"${prefix}" lost "${target}" — got ${hits.slice(0, 5).join(', ')}`);
 else ok(`"${prefix}" → ${hits.length} hits, ${target} at ${hits.indexOf(target) + 1}`);
 
@@ -84,45 +84,45 @@ if (stray.length > hits.length / 2) fail(`mostly loose matches: ${stray.slice(0,
 else ok(`${hits.length - stray.length} of ${hits.length} contain "${prefix}" outright`);
 
 // Back to the exact query, and take it.
-await page.fill('.pq input', target);
+await page.fill('[role=combobox]', target);
 await page.waitForTimeout(150);
 await page.keyboard.press('Enter');
 await page.waitForTimeout(700);
 
-if ((await page.locator('.palette').count()) !== 0) fail('palette stayed open after Enter');
+if ((await page.locator('[role=dialog]').count()) !== 0) fail('palette stayed open after Enter');
 else ok('palette closed');
 
 const url = page.url();
 if (!url.includes('#')) fail(`no fragment in ${url}`);
 else ok(`address carries the symbol: ${decodeURIComponent(url.replace(BASE, ''))}`);
 
-if ((await page.locator('.found').count()) === 0) fail('nothing marked on the destination');
+if ((await page.locator('[data-cqx=found]').count()) === 0) fail('nothing marked on the destination');
 else ok('marked on arrival');
 
 // Pinned, not scrolled to: the row may be four thousandth by use in a list
 // that renders a hundred and twenty, and scrolling cannot reach what was
 // never drawn.
 const firstIsFound = await page.evaluate(() =>
-  (document.querySelectorAll('tbody tr, .sig')[0]?.classList.contains('found')) ?? false);
+  (document.querySelectorAll('tbody tr, [data-cqx=found]')[0]?.hasAttribute('data-cqx')) ?? false);
 if (!firstIsFound) fail('the found row is not first');
 else ok('found row pinned to the top');
 
 // The fragment is state, not decoration.
 await page.reload({ waitUntil: 'domcontentloaded' });
-await page.waitForFunction(() => document.querySelectorAll('.found').length > 0, null, { timeout: 180_000 });
+await page.waitForFunction(() => document.querySelectorAll('[data-cqx=found]').length > 0, null, { timeout: 180_000 });
 ok('reloading the address restores the focus');
 
 // And it belongs to the thing that asked for it.
-await page.click('.lvl:has-text("Packages")');
+await page.click('[data-cqx=elevation]:has-text("Packages")');
 await page.waitForTimeout(400);
 if (page.url().includes('#')) fail(`fragment survived a move: ${page.url()}`);
 else ok('moving elevation clears the fragment');
 
 await page.keyboard.press('/');
-await page.waitForSelector('.palette', { timeout: 3000 });
+await page.waitForSelector('[role=dialog]', { timeout: 3000 });
 await page.keyboard.press('Escape');
 await page.waitForTimeout(200);
-if ((await page.locator('.palette').count()) !== 0) fail('escape did not close');
+if ((await page.locator('[role=dialog]').count()) !== 0) fail('escape did not close');
 else ok('slash opens, escape closes');
 
 await browser.close();

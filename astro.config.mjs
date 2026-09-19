@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import react from '@astrojs/react';
+import tailwind from '@tailwindcss/vite';
 
 export default defineConfig({
   // Static output: the whole site is four files on a CDN, and the analysis runs
@@ -14,6 +15,7 @@ export default defineConfig({
   },
   integrations: [react()],
   vite: {
+    plugins: [tailwind()],
     // The wasm module is an asset, not a dependency to be bundled.
     assetsInclude: ['**/*.wasm'],
   },
