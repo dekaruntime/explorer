@@ -1,4 +1,4 @@
-# cqx-web
+# deka explorer
 
 The web explorer for [cqx](https://github.com/samifouad/cqx): a CodeQuality Score
 and a navigable map of a codebase.
