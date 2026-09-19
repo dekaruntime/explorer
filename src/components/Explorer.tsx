@@ -49,21 +49,26 @@ const seconds = (ms: number): string => (ms / 1000).toFixed(ms < 100 ? 2 : 1);
  * second for nothing. It stays a real link, so opening it in a tab still
  * works — only a plain click is taken over.
  */
-function BrandMark({ brand, onHome }: { brand: Brand; onHome: () => void }) {
+function BrandMark({ brand, onHome }: { brand: Brand; onHome: (() => void) | null }) {
   const inner = brand.icon ? (
     <img src={brand.icon} alt={brand.name} width={30} height={30} />
   ) : (
     brand.name
   );
   if (!brand.href) return <span className="brand" title={brand.name}>{inner}</span>;
-  const local = brand.href.startsWith('/');
+  // Routed only when there is something here to route to. A local href used
+  // to be proof of that, back when the explorer was the whole deployment and
+  // `/` could only mean a repository. On a site whose front page is somebody
+  // else's — cqx.bio's is marketing — `/` is a different page and taking the
+  // click over just moved the reader nowhere.
+  const routed = onHome !== null && brand.href.startsWith('/');
   return (
     <a
       className="brand"
       href={brand.href}
       title={brand.name}
       onClick={(e) => {
-        if (!local || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+        if (!routed || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
         e.preventDefault();
         onHome();
       }}
@@ -279,7 +284,31 @@ export function Explorer() {
   // list it: the store keeps every commit it has ever been given, and only the
   // five most recent are on the rail. Whether it exists is the fetch's answer,
   // not a guess made here.
-  const at = view.ref ?? timeline[0]?.short ?? null;
+  // Releases are fetched independently of the timeline above (see the effect
+  // that clears them), so they can lag a render behind a repository change —
+  // the guard keeps the previous repository's list from flashing under the
+  // new one's tabs for a frame.
+  const releaseList = releases?.of === source ? releases.list : null;
+  const releaseTrouble = releases?.of === source ? releases.trouble : undefined;
+  //
+  // `policy.opensAt` said `release` and only the tab listened: the rail opened
+  // on releases while the report underneath was of the newest commit, so the
+  // highlighted release and the thing being read were two different commits.
+  //
+  // `undefined` is the third answer and the one that matters — releases have
+  // been asked for and not answered. Reading head in the meantime would load
+  // a large file, show it, and then replace it a moment later with the one
+  // that was wanted.
+  const opening = useMemo((): string | null | undefined => {
+    if (policy.opensAt !== 'release') return null;
+    if (!releaseList) return releaseTrouble ? null : undefined;
+    // The newest release whose commit could be resolved. A tag GitHub did not
+    // return in the bulk lookup names no sha and cannot be opened.
+    return releaseList.find((r) => r.sha)?.sha?.slice(0, 8) ?? null;
+  }, [releaseList, releaseTrouble]);
+
+  const at =
+    view.ref ?? (opening === undefined ? null : (opening ?? timeline[0]?.short ?? null));
 
   useEffect(() => {
     if (!source || !at) return;
@@ -357,12 +386,6 @@ export function Explorer() {
    */
   const commit = timeline.findIndex((c) => c.short === shownAt);
 
-  // Releases are fetched independently of the timeline above (see the effect
-  // that clears them), so they can lag a render behind a repository change —
-  // the guard keeps the previous repository's list from flashing under the
-  // new one's tabs for a frame.
-  const releaseList = releases?.of === source ? releases.list : null;
-  const releaseTrouble = releases?.of === source ? releases.trouble : undefined;
   // Null (still asked for) reads as the default, releases. Only once the
   // answer is known to be empty does the fallback to commits apply — and only
   // until the reader picks a tab themselves, which is remembered from there.
@@ -433,14 +456,17 @@ export function Explorer() {
           {catalog?.brand ? (
             <BrandMark
               brand={catalog.brand}
-              onHome={() =>
-                go({
-                  repo: catalog.default ?? source,
-                  ref: null,
-                  pkg: null,
-                  file: null,
-                  level: 'L0',
-                })
+              onHome={
+                catalog.default
+                  ? () =>
+                      go({
+                        repo: catalog.default as string,
+                        ref: null,
+                        pkg: null,
+                        file: null,
+                        level: 'L0',
+                      })
+                  : null
               }
             />
           ) : (

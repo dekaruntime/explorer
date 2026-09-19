@@ -418,8 +418,21 @@ main { min-height: 72vh; }
   box-shadow: 0 18px 50px rgb(0 0 0 / .22); overflow: hidden;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .palette { animation: rise .13s ease both; }
-  .scrim { animation: fade .13s ease both; }
+  /* Its own keyframe, not the one the progress pill uses. That one carries a
+     `translateX(-50%)` because the pill is centred by transform, and the
+     palette is centred by its container — so borrowing it slid the whole
+     sheet in from the left, which read as a drawer rather than as something
+     opening where you asked for it.
+
+     Grows into place instead: a little under full size and a little
+     transparent, arriving at both. Short, because it is covering the moment
+     the page stops accepting keys and the palette starts. */
+  .palette { animation: open .14s cubic-bezier(.2, .8, .3, 1) both; }
+  .scrim { animation: fade .14s ease both; }
+}
+@keyframes open {
+  from { opacity: 0; transform: scale(.97); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes fade { from { opacity: 0 } }
 
