@@ -26,6 +26,16 @@
   --yellow: #d99a12;
   --red: #c2410c;
 
+  /* Syntax, for the code inside a rule card. Six roles cqx-kit reads; a UI
+     palette has nowhere near enough hues for them, so they are their own.
+     Kept clear of --red, which is what marks a finding. */
+  --color-code-comment: #a09781;
+  --color-code-keyword: #9a2f6b;
+  --color-code-string: #567a30;
+  --color-code-number: #a05a00;
+  --color-code-type: #2d6a80;
+  --color-code-function: #3c5a9c;
+
   /* The report's frame: the header's height, the menu's column, and the
      widest the report may get. */
   --head: 69px;
@@ -53,6 +63,13 @@
     --green: #8fae5e;
     --yellow: #eab532;
     --red: #e06a3a;
+
+    --color-code-comment: #5d666c;
+    --color-code-keyword: #e78fbe;
+    --color-code-string: #a8c877;
+    --color-code-number: #f0c45e;
+    --color-code-type: #6fc2d8;
+    --color-code-function: #8fb0ea;
   }
 }
 
@@ -70,6 +87,13 @@
   --green: #8fae5e;
   --yellow: #eab532;
   --red: #e06a3a;
+
+  --color-code-comment: #5d666c;
+  --color-code-keyword: #e78fbe;
+  --color-code-string: #a8c877;
+  --color-code-number: #f0c45e;
+  --color-code-type: #6fc2d8;
+  --color-code-function: #8fb0ea;
 }
 
 @media (min-width: 1560px) {
