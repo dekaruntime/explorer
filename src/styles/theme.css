@@ -115,7 +115,7 @@
   --color-yellow: var(--yellow);
   --color-red: var(--red);
 
-  /* One face here, unlike cqx.bio: deka's explorer is Inconsolata throughout,
+  /* One face here, unlike cqx.dev: deka's explorer is Inconsolata throughout,
      so the display face and the mono face are the same thing. */
   --font-display: "Inconsolata", Monaco, "Courier New", monospace;
   --font-mono: "Inconsolata", Monaco, "Courier New", monospace;

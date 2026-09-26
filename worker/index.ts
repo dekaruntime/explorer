@@ -9,7 +9,7 @@ import { answer, type Store } from 'cqx-kit/gh';
  * expensive is not metered: file contents come from a CDN straight to the
  * browser and never pass through here.
  *
- * What it actually does lives in `cqx-kit/gh`, because cqx.bio answers the
+ * What it actually does lives in `cqx-kit/gh`, because cqx.dev answers the
  * same three from a Next route handler and the two must not drift — they are
  * read by the same engine and cache into the same bucket. What is left here
  * is this deployment's own half: which bindings, and that everything else is
